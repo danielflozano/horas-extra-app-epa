@@ -6,14 +6,14 @@ const crearFuncionario = async (req, res) => {
       nombre_completo,
       identificacion,
       tipoOperario,
-      cargo,
+      Cargo,
     } = req.body;
 
     if (
       !nombre_completo ||
       !identificacion ||
       !tipoOperario ||
-      !cargo
+      !Cargo
     ) {
       return res.status(400).json({
         success: false,
@@ -21,7 +21,6 @@ const crearFuncionario = async (req, res) => {
       });
     }
 
-    // Aquí vendría la lógica para crear el registro en la base de datos
      const nuevoFuncionario = new Funcionarios(req.body);
      await nuevoFuncionario.save();
 
