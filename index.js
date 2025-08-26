@@ -29,6 +29,7 @@ app.use(express.json());
 // TODO: auth // crear, login, renew
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/extras', require('./routes/extras'));
+app.use('/api/funcionario', require('./routes/funcionario'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // TODO: CRUD: eventos

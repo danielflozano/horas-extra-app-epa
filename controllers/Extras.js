@@ -1,31 +1,66 @@
-
 const Extras = require('../models/HorasExtras');
 
+// Crear registro de horas extras
 const crearExtras = async (req, res) => {
   try {
-    const { nombre_completo, identificacion, hora_inicio, hora_fin } = req.body;
+    const {
+      FuncionarioAsignado,
+      fecha_inicio_trabajo,
+      fecha_fin_trabajo,
+      hora_inicio_trabajo,
+      hora_fin_trabajo,
+      fecha_inicio_descanso,
+      fecha_fin_descanso,
+      hora_inicio_descanso,
+      hora_fin_descanso
+    } = req.body;
 
-    if (!nombre_completo || !identificacion || !hora_inicio || !hora_fin) {
+    if (
+     
+      !FuncionarioAsignado||
+      !fecha_inicio_trabajo ||
+      !fecha_fin_trabajo ||
+      !hora_inicio_trabajo ||
+      !hora_fin_trabajo
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Todos los campos obligatorios deben estar completos.'
       });
     }
 
+    // ✅ Validación de formato de hora (solo si se envían)
     const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!horaRegex.test(hora_inicio) || !horaRegex.test(hora_fin)) {
+    if (!horaRegex.test(hora_inicio_trabajo) || !horaRegex.test(hora_fin_trabajo)) {
       return res.status(400).json({
         success: false,
-        message: 'Formato de hora inválido. Debe ser HH:mm'
+        message: 'Formato de hora inválido en hora de trabajo. Debe ser HH:mm (24h).'
+      });
+    }
+    if (
+      (hora_inicio_descanso && !horaRegex.test(hora_inicio_descanso)) ||
+      (hora_fin_descanso && !horaRegex.test(hora_fin_descanso))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Formato de hora inválido en descanso. Debe ser HH:mm (24h).'
       });
     }
 
+    // ✅ Crear el documento
     const nuevaExtra = new Extras({
-      ...req.body,
-      nombre_completo: nombre_completo.trim(),
-      identificacion: identificacion.trim()
+      FuncionarioAsignado,
+      fecha_inicio_trabajo,
+      fecha_fin_trabajo,
+      hora_inicio_trabajo,
+      hora_fin_trabajo,
+      fecha_inicio_descanso,
+      fecha_fin_descanso,
+      hora_inicio_descanso,
+      hora_fin_descanso
     });
 
+    // ✅ Guardar (el pre-save hook hará cálculos: horas trabajadas, descanso, día)
     await nuevaExtra.save();
 
     res.status(201).json({
@@ -36,38 +71,39 @@ const crearExtras = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Error interno en el servidor'
     });
   }
 };
 
+// Eliminar registro
 const eliminarExtras = async (req, res) => {
   try {
     const { id } = req.params;
-
 
     const extra = await Extras.findByIdAndDelete(id);
 
     if (!extra) {
       return res.status(404).json({
         success: false,
-        message: 'Extra no encontrado.'
+        message: 'Registro no encontrado.'
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Extra eliminado correctamente.',
+      message: 'Registro eliminado correctamente.',
       data: extra
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || 'Error interno al eliminar extra'
+      message: error.message || 'Error interno al eliminar'
     });
   }
 };
 
+// Actualizar registro
 const updateExtra = async (req, res) => {
   try {
     const { id } = req.params;
@@ -77,28 +113,31 @@ const updateExtra = async (req, res) => {
     if (!extra) {
       return res.status(404).json({
         success: false,
-        message: 'Extra no encontrado.'
+        message: 'Registro no encontrado.'
       });
     }
 
+    // Actualizar campos dinámicamente
     for (let campo in nuevosDatos) {
       if (extra[campo] !== undefined && extra[campo] !== nuevosDatos[campo]) {
         extra[campo] = nuevosDatos[campo];
       }
     }
 
-    await extra.save(); // guardar cambios
+    // ✅ Guardar para recalcular en el hook
+    await extra.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Extra actualizado correctamente.',
+      message: 'Registro actualizado correctamente.',
       data: extra
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message || 'Error interno al actualizar extra'
+      message: error.message || 'Error interno al actualizar'
     });
   }
 };
-module.exports = { crearExtras, eliminarExtras,updateExtra };
+
+module.exports = { crearExtras, eliminarExtras, updateExtra };
