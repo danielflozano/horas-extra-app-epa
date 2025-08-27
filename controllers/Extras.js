@@ -1,82 +1,34 @@
 const Extras = require('../models/HorasExtras');
+const {calcularHorasExtras} = require('../helpers/CalculoHoras');
 
-// Crear registro de horas extras
 const crearExtras = async (req, res) => {
   try {
-    const {
-      FuncionarioAsignado,
-      fecha_inicio_trabajo,
-      fecha_fin_trabajo,
-      hora_inicio_trabajo,
-      hora_fin_trabajo,
-      fecha_inicio_descanso,
-      fecha_fin_descanso,
-      hora_inicio_descanso,
-      hora_fin_descanso
-    } = req.body;
+    const data = req.body;
 
-    if (
-     
-      !FuncionarioAsignado||
-      !fecha_inicio_trabajo ||
-      !fecha_fin_trabajo ||
-      !hora_inicio_trabajo ||
-      !hora_fin_trabajo
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Todos los campos obligatorios deben estar completos.'
-      });
+    // Validación básica
+    if (!data.FuncionarioAsignado || !data.fecha_inicio_trabajo || !data.hora_inicio_trabajo || !data.hora_fin_trabajo) {
+      return res.status(400).json({ success: false, message: 'Campos obligatorios faltantes.' });
     }
 
-    // ✅ Validación de formato de hora (solo si se envían)
-    const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!horaRegex.test(hora_inicio_trabajo) || !horaRegex.test(hora_fin_trabajo)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Formato de hora inválido en hora de trabajo. Debe ser HH:mm (24h).'
-      });
-    }
-    if (
-      (hora_inicio_descanso && !horaRegex.test(hora_inicio_descanso)) ||
-      (hora_fin_descanso && !horaRegex.test(hora_fin_descanso))
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Formato de hora inválido en descanso. Debe ser HH:mm (24h).'
-      });
-    }
+    // Calcular todas las horas
+    const calculos = calcularHorasExtras(data);
 
-    // ✅ Crear el documento
-    const nuevaExtra = new Extras({
-      FuncionarioAsignado,
-      fecha_inicio_trabajo,
-      fecha_fin_trabajo,
-      hora_inicio_trabajo,
-      hora_fin_trabajo,
-      fecha_inicio_descanso,
-      fecha_fin_descanso,
-      hora_inicio_descanso,
-      hora_fin_descanso
-    });
+    // Combinar data + cálculos
+    const nuevaExtra = new Extras({ ...data, ...calculos });
 
-    // ✅ Guardar (el pre-save hook hará cálculos: horas trabajadas, descanso, día)
     await nuevaExtra.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Registro de horas extra creado correctamente.',
+      message: 'Registro creado correctamente.',
       data: nuevaExtra
     });
+
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error interno en el servidor'
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Eliminar registro
 const eliminarExtras = async (req, res) => {
   try {
     const { id } = req.params;
@@ -103,7 +55,6 @@ const eliminarExtras = async (req, res) => {
   }
 };
 
-// Actualizar registro
 const updateExtra = async (req, res) => {
   try {
     const { id } = req.params;
@@ -140,4 +91,4 @@ const updateExtra = async (req, res) => {
   }
 };
 
-module.exports = { crearExtras, eliminarExtras, updateExtra };
+module.exports = { crearExtras,eliminarExtras,updateExtra };
