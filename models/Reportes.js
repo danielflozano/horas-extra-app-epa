@@ -15,4 +15,4 @@ const ReporteSchema = Schema({
   }
 });
 
-module.exports = model( 'Usuario', UsuarioSchema );
+module.exports = model( 'Reportes', ReporteSchema );
