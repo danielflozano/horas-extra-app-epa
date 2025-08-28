@@ -11,7 +11,9 @@ const crearExtras = async (req, res) => {
       !data.fecha_inicio_trabajo ||
       !data.hora_inicio_trabajo ||
       !data.fecha_fin_trabajo ||
-      !data.hora_fin_trabajo
+      !data.hora_fin_trabajo 
+      //!data.es_festivo_Inicio ||
+      //!data.es_festivo_Fin
     ) {
       return res.status(400).json({ success: false, message: 'Campos obligatorios faltantes.' });
     }
@@ -65,7 +67,7 @@ const crearExtras = async (req, res) => {
         return res.status(400).json({ success: false, message: 'El descanso debe estar dentro del rango del trabajo.' });
       }
     }
-
+  
     //  Validación: en un mismo día, máximo 24h
     if (data.fecha_inicio_trabajo === data.fecha_fin_trabajo) {
       const diffHoras = (finTrabajo - inicioTrabajo) / (1000 * 60 * 60);

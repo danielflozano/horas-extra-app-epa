@@ -31,6 +31,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/extras', require('./routes/extras'));
 app.use('/api/funcionario', require('./routes/funcionario'));
 app.use('/api/', require('./routes/cargo'));
+app.use('/api/Reporte', require('./routes/reporte'))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // TODO: CRUD: eventos

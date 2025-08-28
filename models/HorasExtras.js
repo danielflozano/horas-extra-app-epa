@@ -26,9 +26,10 @@ const horasExtrasSchema = new mongoose.Schema({
   horas_dominicales_diurnas: { type: String, default: '00:00' },
   horas_dominicales_nocturnas: { type: String, default: '00:00' },
   horas_extras: { type: String, default: '00:00' },
-
+  recargo_nocturno: { type: String, default: "00:00" },
   es_fin_de_semana: { type: Boolean, default: false },
-  es_festivo: { type: Boolean, default: false },
+  es_festivo_Inicio: { type: Boolean, default: false },
+  es_festivo_Fin: { type: Boolean, default: false },
 
   dia_semana: { type: String },
   tipo_dia: { type: String }
