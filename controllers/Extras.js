@@ -6,19 +6,18 @@ const crearExtras = async (req, res) => {
   try {
     let data = req.body;
 
+    // ✅ Validación de campos obligatorios
     if (
       !data.FuncionarioAsignado ||
       !data.fecha_inicio_trabajo ||
       !data.hora_inicio_trabajo ||
       !data.fecha_fin_trabajo ||
-      !data.hora_fin_trabajo 
-      //!data.es_festivo_Inicio ||
-      //!data.es_festivo_Fin
+      !data.hora_fin_trabajo
     ) {
       return res.status(400).json({ success: false, message: 'Campos obligatorios faltantes.' });
     }
 
-  
+    // ✅ Validar formato de hora
     const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!horaRegex.test(data.hora_inicio_trabajo) || !horaRegex.test(data.hora_fin_trabajo)) {
       return res.status(400).json({ success: false, message: 'Formato de hora inválido (HH:mm).' });
@@ -30,17 +29,17 @@ const crearExtras = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Formato de hora inválido en descanso (HH:mm).' });
     }
 
-    //  Ajustar automáticamente la fecha fin si la hora fin es menor que la hora inicio
+    // ✅ Ajustar automáticamente la fecha fin si la hora fin es menor que la hora inicio
     const inicioTrabajo = new Date(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}:00`);
     let finTrabajo = new Date(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}:00`);
 
     if (finTrabajo <= inicioTrabajo) {
-      // Significa que cruzó medianoche → sumamos un día
+      // Cruzó medianoche
       finTrabajo.setDate(finTrabajo.getDate() + 1);
-      data.fecha_fin_trabajo = finTrabajo.toISOString().split('T')[0]; // Ajustamos la fecha en el body
+      data.fecha_fin_trabajo = finTrabajo.toISOString().split('T')[0];
     }
 
-    //  Ajuste similar para descanso si aplica
+    // ✅ Ajuste similar para descanso si aplica
     if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso) {
       const inicioDescanso = new Date(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}:00`);
       let finDescanso = new Date(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}:00`);
@@ -51,12 +50,12 @@ const crearExtras = async (req, res) => {
       }
     }
 
-    //  Validación coherencia fechas después del ajuste
+    // ✅ Validación coherencia fechas después del ajuste
     if (finTrabajo <= inicioTrabajo) {
       return res.status(400).json({ success: false, message: 'La fecha/hora de fin debe ser posterior a la de inicio.' });
     }
 
-    //  Validación descanso (si viene)
+    // ✅ Validación descanso dentro del rango
     if (data.fecha_inicio_descanso && data.fecha_fin_descanso && data.hora_inicio_descanso && data.hora_fin_descanso) {
       const inicioDescanso = new Date(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}:00`);
       const finDescanso = new Date(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}:00`);
@@ -67,8 +66,8 @@ const crearExtras = async (req, res) => {
         return res.status(400).json({ success: false, message: 'El descanso debe estar dentro del rango del trabajo.' });
       }
     }
-  
-    //  Validación: en un mismo día, máximo 24h
+
+    // ✅ Validación: en un mismo día, máximo 24h
     if (data.fecha_inicio_trabajo === data.fecha_fin_trabajo) {
       const diffHoras = (finTrabajo - inicioTrabajo) / (1000 * 60 * 60);
       if (diffHoras > 24) {
@@ -76,16 +75,29 @@ const crearExtras = async (req, res) => {
       }
     }
 
-    //  Validación global: máximo 48 horas continuas
+    // ✅ Validación global: máximo 48 horas continuas
     const diffGlobalHoras = (finTrabajo - inicioTrabajo) / (1000 * 60 * 60);
     if (diffGlobalHoras > 48) {
       return res.status(400).json({ success: false, message: 'El periodo no puede exceder 48 horas continuas.' });
     }
 
-    //  Calcular las horas extras y categorías
+    // ✅ Validación: verificar si ya existe un registro el mismo día
+    const existeRegistro = await Extras.findOne({
+      FuncionarioAsignado: data.FuncionarioAsignado,
+      fecha_inicio_trabajo: data.fecha_inicio_trabajo
+    });
+
+    if (existeRegistro) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ya existe un registro de horas extras para este funcionario en esta fecha.'
+      });
+    }
+
+    // ✅ Calcular las horas extras y categorías
     const calculos = calcularHorasExtras(data);
 
-    //  Guardar en BD
+    // ✅ Guardar en BD
     const nuevaExtra = new Extras({ ...data, ...calculos });
     await nuevaExtra.save();
 
