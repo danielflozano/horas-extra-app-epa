@@ -35,7 +35,6 @@ app.use('/api/Reporte', require('./routes/reporte'))
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // TODO: CRUD: eventos
-
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {

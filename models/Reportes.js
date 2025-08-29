@@ -19,35 +19,35 @@ const ReporteSchema = Schema({
      requiere: true
   },
   HDO_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HENO_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HEDF_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HENF_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HDF_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HNF_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   RNO_HORA:{
-    type: Number,
+    type: String,
     require: true
   },
   HEDO_CONVERSION:{
-    type: Number,
+    type: String,
     require: true
   },HENO_CONERSION:{
     type: Number,
@@ -78,8 +78,12 @@ const ReporteSchema = Schema({
     require: true
   },
   totalHorasExtra: {
-    type:Number,
+    type:String,
     require:true
+  },
+  TotalHorasExtraConverion:{
+    type: Number,
+    require: true
   },
   cantidad_Trabajados:{
     type: String,
