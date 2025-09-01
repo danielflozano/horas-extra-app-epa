@@ -1,157 +1,352 @@
 const Extras = require('../models/HorasExtras');
+const Funcionario = require('../models/Funcionarios');
 const { calcularHorasExtras } = require('../helpers/CalculoHoras');
+const moment = require('moment');
+const ExcelJS = require('exceljs');
 
 // Crear registro
 const crearExtras = async (req, res) => {
   try {
-    let data = req.body;
+    const data = req.body;
 
-    // ✅ Validación de campos obligatorios
-    if (
-      !data.FuncionarioAsignado ||
-      !data.fecha_inicio_trabajo ||
-      !data.hora_inicio_trabajo ||
-      !data.fecha_fin_trabajo ||
-      !data.hora_fin_trabajo
-    ) {
-      return res.status(400).json({ success: false, message: 'Campos obligatorios faltantes.' });
+    // Campos obligatorios
+    const camposObligatorios = [
+      'FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo',
+      'fecha_fin_trabajo', 'hora_fin_trabajo'
+    ];
+    for (const campo of camposObligatorios) {
+      if (!data[campo]) return res.status(400).json({ success: false, message: `Falta el campo: ${campo}` });
     }
 
-    // ✅ Validar formato de hora
+    // Validar formato hora
     const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!horaRegex.test(data.hora_inicio_trabajo) || !horaRegex.test(data.hora_fin_trabajo)) {
-      return res.status(400).json({ success: false, message: 'Formato de hora inválido (HH:mm).' });
-    }
-    if (
-      (data.hora_inicio_descanso && !horaRegex.test(data.hora_inicio_descanso)) ||
-      (data.hora_fin_descanso && !horaRegex.test(data.hora_fin_descanso))
-    ) {
-      return res.status(400).json({ success: false, message: 'Formato de hora inválido en descanso (HH:mm).' });
-    }
+    ['hora_inicio_trabajo','hora_fin_trabajo','hora_inicio_descanso','hora_fin_descanso']
+      .forEach(c => { if(data[c] && !horaRegex.test(data[c])) throw new Error(`Formato inválido en ${c}`) });
 
-    // ✅ Ajustar automáticamente la fecha fin si la hora fin es menor que la hora inicio
-    const inicioTrabajo = new Date(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}:00`);
-    let finTrabajo = new Date(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}:00`);
+    // Validar fechas
+    ['fecha_inicio_trabajo','fecha_fin_trabajo','fecha_inicio_descanso','fecha_fin_descanso']
+      .forEach(f => { if(data[f] && !moment(data[f],'YYYY-MM-DD',true).isValid()) throw new Error(`Fecha inválida: ${f}`) });
 
-    if (finTrabajo <= inicioTrabajo) {
-      // Cruzó medianoche
-      finTrabajo.setDate(finTrabajo.getDate() + 1);
-      data.fecha_fin_trabajo = finTrabajo.toISOString().split('T')[0];
-    }
+    const existeFuncionario = await Funcionario.findById(data.FuncionarioAsignado);
+    if (!existeFuncionario) return res.status(400).json({ success: false, message: 'Funcionario no encontrado.' });
 
-    // ✅ Ajuste similar para descanso si aplica
-    if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso) {
-      const inicioDescanso = new Date(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}:00`);
-      let finDescanso = new Date(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}:00`);
+    // Ajuste fechas de trabajo
+    let inicioTrabajo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
+    let finTrabajo = moment(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}`);
+    if (finTrabajo.isBefore(inicioTrabajo)) finTrabajo.add(1, 'day');
 
-      if (finDescanso <= inicioDescanso) {
-        finDescanso.setDate(finDescanso.getDate() + 1);
-        data.fecha_fin_descanso = finDescanso.toISOString().split('T')[0];
-      }
+    // Validar descanso
+    if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso){
+      let inicioDesc = moment(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}`);
+      let finDesc = moment(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}`);
+      if(finDesc.isBefore(inicioDesc)) finDesc.add(1,'day');
+      if(inicioDesc.isBefore(inicioTrabajo) || finDesc.isAfter(finTrabajo)) 
+        return res.status(400).json({ success:false, message:'Descanso fuera del rango de trabajo' });
+      if(finDesc.diff(inicioDesc,'minutes')>480)
+        return res.status(400).json({ success:false, message:'Descanso > 8h' });
     }
 
-    // ✅ Validación coherencia fechas después del ajuste
-    if (finTrabajo <= inicioTrabajo) {
-      return res.status(400).json({ success: false, message: 'La fecha/hora de fin debe ser posterior a la de inicio.' });
-    }
-
-    // ✅ Validación descanso dentro del rango
-    if (data.fecha_inicio_descanso && data.fecha_fin_descanso && data.hora_inicio_descanso && data.hora_fin_descanso) {
-      const inicioDescanso = new Date(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}:00`);
-      const finDescanso = new Date(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}:00`);
-      if (finDescanso <= inicioDescanso) {
-        return res.status(400).json({ success: false, message: 'El fin del descanso debe ser posterior al inicio.' });
-      }
-      if (inicioDescanso < inicioTrabajo || finDescanso > finTrabajo) {
-        return res.status(400).json({ success: false, message: 'El descanso debe estar dentro del rango del trabajo.' });
-      }
-    }
-
-    // ✅ Validación: en un mismo día, máximo 24h
-    if (data.fecha_inicio_trabajo === data.fecha_fin_trabajo) {
-      const diffHoras = (finTrabajo - inicioTrabajo) / (1000 * 60 * 60);
-      if (diffHoras > 24) {
-        return res.status(400).json({ success: false, message: 'En un mismo día no puede superar 24 horas.' });
-      }
-    }
-
-    // ✅ Validación global: máximo 48 horas continuas
-    const diffGlobalHoras = (finTrabajo - inicioTrabajo) / (1000 * 60 * 60);
-    if (diffGlobalHoras > 48) {
-      return res.status(400).json({ success: false, message: 'El periodo no puede exceder 48 horas continuas.' });
-    }
-
-    // ✅ Validación: verificar si ya existe un registro el mismo día
+    // Validar solapamiento de registros
     const existeRegistro = await Extras.findOne({
-      FuncionarioAsignado: data.FuncionarioAsignado,
-      fecha_inicio_trabajo: data.fecha_inicio_trabajo
+      FuncionarioAsignado:data.FuncionarioAsignado,
+      $or:[{
+        $and:[
+          {fecha_inicio_trabajo:{$lte:data.fecha_fin_trabajo}},
+          {fecha_fin_trabajo:{$gte:data.fecha_inicio_trabajo}}
+        ]
+      }]
     });
+    if(existeRegistro) return res.status(400).json({ success:false, message:'Registro se solapa' });
 
-    if (existeRegistro) {
-      return res.status(400).json({
-        success: false,
-        message: 'Ya existe un registro de horas extras para este funcionario en esta fecha.'
-      });
-    }
+    // Validación mínima 8h (lunes-sábado)
+    const minutosEfectivos = finTrabajo.diff(inicioTrabajo,'minutes');
+    const diaSemana = inicioTrabajo.isoWeekday();
+    if((diaSemana>=1 && diaSemana<=6) && !data.es_festivo_Inicio && minutosEfectivos<480)
+      return res.status(400).json({ success:false, message:'Mínimo 8h efectivas' });
 
-    // ✅ Calcular las horas extras y categorías
+    // Calcular horas extras
     const calculos = calcularHorasExtras(data);
 
-    // ✅ Guardar en BD
-    const nuevaExtra = new Extras({ ...data, ...calculos });
+    // Revisar si la fecha es futura
+    if (!calculos.success) return res.status(400).json(calculos);
+
+    // Guardar registro
+    const nuevaExtra = new Extras({...data, ...calculos});
     await nuevaExtra.save();
 
-    return res.status(201).json({
-      success: true,
-      message: 'Registro creado correctamente.',
-      data: nuevaExtra
-    });
+    res.status(201).json({ success:true, message:'Registro creado', data:nuevaExtra });
 
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Eliminar registro
-const eliminarExtras = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const extra = await Extras.findByIdAndDelete(id);
-
-    if (!extra) {
-      return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
-    }
-
-    return res.status(200).json({ success: true, message: 'Registro eliminado correctamente.', data: extra });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success:false, message:error.message });
   }
 };
 
 // Actualizar registro
-const updateExtra = async (req, res) => {
-  try {
-    const { id } = req.params;
+const updateExtra = async (req,res)=>{
+  try{
+    const {id} = req.params;
     const nuevosDatos = req.body;
-
     const extra = await Extras.findById(id);
-    if (!extra) {
-      return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
-    }
+    if(!extra) return res.status(404).json({ success:false, message:'No encontrado' });
 
-    // Actualizar dinámicamente
-    for (let campo in nuevosDatos) {
-      if (extra[campo] !== undefined && extra[campo] !== nuevosDatos[campo]) {
-        extra[campo] = nuevosDatos[campo];
+    const camposClave = ['fecha_inicio_trabajo','hora_inicio_trabajo','fecha_fin_trabajo','hora_fin_trabajo','fecha_inicio_descanso','hora_inicio_descanso','fecha_fin_descanso','hora_fin_descanso'];
+    let recalcular = false;
+
+    for(let campo in nuevosDatos){
+      if(extra[campo]!==undefined && extra[campo]!==nuevosDatos[campo]){
+        extra[campo]=nuevosDatos[campo];
+        if(camposClave.includes(campo)) recalcular=true;
       }
     }
 
-    await extra.save();
+    if(recalcular){
+      const calculos = calcularHorasExtras(extra.toObject());
+      Object.assign(extra, calculos);
+    }
 
-    return res.status(200).json({ success: true, message: 'Registro actualizado correctamente.', data: extra });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    await extra.save();
+    res.status(200).json({ success:true, message:'Registro actualizado', data:extra });
+  }catch(error){
+    res.status(500).json({ success:false, message:error.message });
   }
 };
 
-module.exports = { crearExtras, eliminarExtras, updateExtra };
+const exportarExtrasExcel = async (req, res) => {
+  try {
+    const { identificacion, fechaInicio, fechaFin } = req.query;
+    let query = {};
+
+    // 1️⃣ Filtrar por identificación si existe
+    if (identificacion) {
+      const func = await Funcionario.findOne({ identificacion });
+      if (!func) {
+        // Excel vacío si no existe funcionario
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Horas Extras');
+        sheet.addRow(['No hay datos para esa identificación']);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=HorasExtras.xlsx');
+        await workbook.xlsx.write(res);
+        return res.end();
+      }
+      query.FuncionarioAsignado = func._id;
+    }
+
+    // 2️⃣ Filtrar por fechas si existen
+    if (fechaInicio && fechaFin) {
+      const inicio = new Date(fechaInicio);
+      const fin = new Date(fechaFin);
+      fin.setHours(23,59,59,999); // Incluir todo el día final
+      query.fecha_inicio_trabajo = { $gte: inicio };
+      query.fecha_fin_trabajo = { $lte: fin };
+    }
+
+    // 3️⃣ Buscar registros
+    const extras = await Extras.find(query)
+      .populate({ path: 'FuncionarioAsignado', select: 'nombre_completo identificacion', populate: { path: 'Cargo', select: 'name' } })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    // 4️⃣ Crear Excel
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Horas Extras');
+
+    sheet.columns = [
+      { header: 'Funcionario', key: 'nombre', width: 25 },
+      { header: 'Identificación', key: 'identificacion', width: 15 },
+      { header: 'Cargo', key: 'cargo', width: 20 },
+      { header: 'Fecha Inicio', key: 'fechaInicio', width: 15 },
+      { header: 'Hora Inicio', key: 'horaInicio', width: 10 },
+      { header: 'Fecha Fin', key: 'fechaFin', width: 15 },
+      { header: 'Hora Fin', key: 'horaFin', width: 10 },
+      { header: 'HDO', key: 'HDO', width: 10 },
+      { header: 'HENO', key: 'HENO', width: 10 },
+      { header: 'HEDF', key: 'HEDF', width: 10 },
+      { header: 'HENF', key: 'HENF', width: 10 },
+      { header: 'HDF', key: 'HDF', width: 10 },
+      { header: 'HNF', key: 'HNF', width: 10 },
+      { header: 'RNO', key: 'RNO', width: 10 },
+      { header: 'Total Extras', key: 'total', width: 15 },
+    ];
+
+    if (extras.length === 0) {
+      sheet.addRow(['No hay datos']);
+    } else {
+      extras.forEach(e => {
+        sheet.addRow({
+          nombre: e.FuncionarioAsignado?.nombre_completo || '',
+          identificacion: e.FuncionarioAsignado?.identificacion || '',
+          cargo: e.FuncionarioAsignado?.Cargo?.name || '',
+          fechaInicio: e.fecha_inicio_trabajo ? e.fecha_inicio_trabajo.toLocaleDateString() : '',
+          horaInicio: e.hora_inicio_trabajo || '',
+          fechaFin: e.fecha_fin_trabajo ? e.fecha_fin_trabajo.toLocaleDateString() : '',
+          horaFin: e.hora_fin_trabajo || '',
+          HDO: e.horas_ordinarias_diurnas || 0,
+          HENO: e.horas_ordinarias_nocturnas || 0,
+          HEDF: e.horas_dominicales_diurnas || 0,
+          HENF: e.horas_dominicales_nocturnas || 0,
+          HDF: e.horas_extras_diurnas || 0,
+          HNF: e.horas_extras_nocturnas || 0,
+          RNO: e.recargo_nocturno || 0,
+          total: e.horas_extras || 0,
+        });
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=HorasExtras.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success:false, message:'Error al generar Excel' });
+  }
+};
+
+
+// Eliminar registro
+const eliminarExtras = async (req,res)=>{
+  try{
+    const {id}=req.params;
+    const extra = await Extras.findByIdAndDelete(id);
+    if(!extra) return res.status(404).json({ success:false, message:'No encontrado' });
+    res.status(200).json({ success:true, message:'Registro eliminado', data:extra });
+  }catch(error){
+    res.status(500).json({ success:false, message:error.message });
+  }
+};
+
+const listarExtras = async (req, res) => {
+  try {
+    const extras = await Extras.find()
+      .populate({
+        path: "FuncionarioAsignado",
+        select: "nombre_completo identificacion",
+        populate: { path: "Cargo", select: "name" },
+      })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    const data = extras.map((e) => {
+      const inicio = e.fecha_inicio_trabajo
+        ? new Date(e.fecha_inicio_trabajo.getTime() + 24 * 60 * 60 * 1000)
+        : null;
+
+      const fin = e.fecha_fin_trabajo
+        ? new Date(e.fecha_fin_trabajo.getTime() + 24 * 60 * 60 * 1000)
+        : null;
+
+      return {
+        ...e._doc,
+        fecha_inicio_trabajo: inicio,
+        fecha_fin_trabajo: fin,
+      };
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+
+// Filtrar por identificación
+const listarExtrasPorIdentificacion = async (req, res) => {
+  try {
+    const { identificacion } = req.query;
+    if (!identificacion) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Falta identificación" });
+    }
+
+    const extras = await Extras.find()
+      .populate({
+        path: "FuncionarioAsignado",
+        match: { identificacion },
+        select: "nombre_completo identificacion",
+        populate: { path: "Cargo", select: "name" },
+      })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    const filtrados = extras
+      .filter((e) => e.FuncionarioAsignado)
+      .map((e) => {
+        const inicio = e.fecha_inicio_trabajo
+          ? new Date(e.fecha_inicio_trabajo.getTime() + 24 * 60 * 60 * 1000)
+          : null;
+
+        const fin = e.fecha_fin_trabajo
+          ? new Date(e.fecha_fin_trabajo.getTime() + 24 * 60 * 60 * 1000)
+          : null;
+
+        return {
+          ...e._doc,
+          fecha_inicio_trabajo: inicio,
+          fecha_fin_trabajo: fin,
+        };
+      });
+
+    res.status(200).json({ success: true, data: filtrados });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+const listarExtrasPorFechas = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Faltan fechas" });
+    }
+
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+    fin.setHours(23, 59, 59, 999);
+
+    const extras = await Extras.find({
+      fecha_inicio_trabajo: { $gte: inicio },
+      fecha_fin_trabajo: { $lte: fin },
+    })
+      .populate({
+        path: "FuncionarioAsignado",
+        select: "nombre_completo identificacion",
+        populate: { path: "Cargo", select: "name" },
+      })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    // ✅ Ajuste: sumamos un día solo en la respuesta
+    const data = extras.map((e) => {
+      const inicio = e.fecha_inicio_trabajo
+        ? new Date(e.fecha_inicio_trabajo.getTime() + 24 * 60 * 60 * 1000)
+        : null;
+
+      const fin = e.fecha_fin_trabajo
+        ? new Date(e.fecha_fin_trabajo.getTime() + 24 * 60 * 60 * 1000)
+        : null;
+
+      return {
+        ...e._doc,
+        fecha_inicio_trabajo: inicio,
+        fecha_fin_trabajo: fin,
+      };
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  crearExtras,
+  updateExtra,
+  eliminarExtras,
+  listarExtras,
+  listarExtrasPorIdentificacion,
+  listarExtrasPorFechas, 
+  exportarExtrasExcel
+};

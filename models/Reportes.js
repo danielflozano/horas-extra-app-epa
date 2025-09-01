@@ -1,94 +1,45 @@
 const { Schema, model } = require('mongoose');
 
 const ReporteSchema = Schema({
-
-  identificacion_Funcionario:{
+  identificacion_Funcionario: {
     type: String,
-    require: true
+    required: true
   },
-  nombre_Funcionario:{
+  nombre_Funcionario: {
     type: String,
-    require: true
+    required: true
   },
-  fechaInicioReporte:{
-     type: Date,
-     requiere: true
+  fechaInicioReporte: {
+    type: Date,
+    required: true
   },
-  fechaFinReporte :{
-     type: Date,
-     requiere: true
+  fechaFinReporte: {
+    type: Date,
+    required: true
   },
-  HDO_HORA:{
-    type: String,
-    require: true
-  },
-  HENO_HORA:{
-    type: String,
-    require: true
-  },
-  HEDF_HORA:{
-    type: String,
-    require: true
-  },
-  HENF_HORA:{
-    type: String,
-    require: true
-  },
-  HDF_HORA:{
-    type: String,
-    require: true
-  },
-  HNF_HORA:{
-    type: String,
-    require: true
-  },
-  RNO_HORA:{
-    type: String,
-    require: true
-  },
-  HEDO_CONVERSION:{
-    type: String,
-    require: true
-  },HENO_CONERSION:{
-    type: Number,
-    require: true
-  },
-  HEDF_CONVERSION:{
-    type: Number,
-    require: true
-  },
-  HENF_CONVERSION:{
-    type: Number,
-    require: true
-  },
-  HDF_CONVERSION:{
-    type: Number,
-    require: true
-  },
-  HNF_CONVERSION:{
-    type: Number,
-    require: true
-  },
-  RNO_CONVERSION:{
-    type: Number,
-    require: true
-  },
-  Periodo:{
-    type:String,
-    require: true
-  },
-  totalHorasExtra: {
-    type:String,
-    require:true
-  },
-  TotalHorasExtraConverion:{
-    type: Number,
-    require: true
-  },
-  cantidad_Trabajados:{
-    type: String,
-    requiere: true
-  }
+  // Extras HH:mm
+  HEDO_HORA: { type: String, required: true },
+  HENO_HORA: { type: String, required: true },
+  HEDF_HORA: { type: String, required: true },
+  HENF_HORA: { type: String, required: true },
+  // Suplementarias HH:mm
+  HDF_HORA: { type: String, required: true },
+  HNF_HORA: { type: String, required: true },
+  RNO_HORA: { type: String, required: true },
+  // Extras decimal
+  HEDO_DEC: { type: Number, required: true },
+  HENO_DEC: { type: Number, required: true },
+  HEDF_DEC: { type: Number, required: true },
+  HENF_DEC: { type: Number, required: true },
+  // Suplementarias decimal
+  HDF_DEC: { type: Number, required: true },
+  HNF_DEC: { type: Number, required: true },
+  RNO_DEC: { type: Number, required: true },
+  // Sumatorias finales en decimal
+  totalExtras_DEC: { type: Number, required: true },
+  totalSuplementarias_DEC: { type: Number, required: true },
+  totalHoras_DEC: { type: Number, required: true },
+  periodo: { type: String, required: true }
 });
 
-module.exports = model( 'Reportes', ReporteSchema );
+module.exports = model('Reportes', ReporteSchema);

@@ -1,258 +1,245 @@
-const HorasExtras = require('../models/HorasExtras');
-const Funcionario = require('../models/Funcionarios');
 const Reporte = require('../models/Reportes');
+const HorasExtras = require('../models/HorasExtras');
 const ExcelJS = require("exceljs");
+const moment = require('moment');
 
-// ✅ Generar reporte para UN funcionario
-async function generarReporteController(req, res) {
-  try {
-    const { idFuncionario, fechaInicio, fechaFin, periodo } = req.query;
-
-    if (!idFuncionario || !fechaInicio || !fechaFin) {
-      return res.status(400).json({ mensaje: 'Campos obligatorios faltantes.' });
-    }
-
-    const funcionario = await Funcionario.findById(idFuncionario);
-    if (!funcionario) return res.status(404).json({ mensaje: 'Funcionario no encontrado' });
-
-    const fechaInicioDate = new Date(fechaInicio);
-    const fechaFinDate = new Date(fechaFin);
-
-    const registros = await HorasExtras.find({
-      FuncionarioAsignado: idFuncionario,
-      $or: [
-        { fecha_inicio_trabajo: { $gte: fechaInicioDate, $lte: fechaFinDate } },
-        { fecha_fin_trabajo: { $gte: fechaInicioDate, $lte: fechaFinDate } }
-      ]
-    });
-
-    if (registros.length === 0) {
-      return res.status(404).json({ mensaje: 'No hay registros en el rango' });
-    }
-
-    // 🔹 acumuladores
-    let HDO = 0, HENO = 0, HEDF = 0, HENF = 0, HDF = 0, HNF = 0, RNO = 0;
-
-    registros.forEach(r => {
-      HDO += convertirAHorasAMinutos(r.horas_ordinarias_diurnas);
-      HENO += convertirAHorasAMinutos(r.horas_ordinarias_nocturnas);
-      HEDF += convertirAHorasAMinutos(r.horas_dominicales_diurnas);
-      HENF += convertirAHorasAMinutos(r.horas_dominicales_nocturnas);
-      HDF += convertirAHorasAMinutos(r.horas_extras_diurnas);
-      HNF += convertirAHorasAMinutos(r.horas_extras_nocturnas);
-      RNO += convertirAHorasAMinutos(r.recargo_nocturno);
-    });
-
-    const totalHorasExtra = HDO + HENO + HEDF + HENF + HDF + HNF + RNO;
-
-    // Calcular tiempo trabajado
-    const diffTime = fechaFinDate - fechaInicioDate;
-    const totalMinutes = Math.floor(diffTime / (1000 * 60));
-    const dias = Math.floor(totalMinutes / (60 * 24));
-    const horas = Math.floor((totalMinutes % (60 * 24)) / 60);
-    const minutos = totalMinutes % 60;
-    const cantidad_Trabajados = `${dias + 1}d ${horas}h ${minutos}m`;
-
-    const reporte = {
-      identificacion_Funcionario: funcionario.identificacion,
-      nombre_Funcionario: funcionario.nombre_completo,
-      fechaInicioReporte: fechaInicio,
-      fechaFinReporte: fechaFin,
-      HDO_HORA: minutosAHHMMSS(HDO),
-      HENO_HORA: minutosAHHMMSS(HENO),
-      HEDF_HORA: minutosAHHMMSS(HEDF),
-      HENF_HORA: minutosAHHMMSS(HENF),
-      HDF_HORA: minutosAHHMMSS(HDF),
-      HNF_HORA: minutosAHHMMSS(HNF),
-      RNO_HORA: minutosAHHMMSS(RNO),
-      HEDO_CONVERSION: (HDO / 60).toFixed(1),
-      HENO_CONVERSION: (HENO / 60).toFixed(1),
-      HEDF_CONVERSION: (HEDF / 60).toFixed(1),
-      HENF_CONVERSION: (HENF / 60).toFixed(1),
-      HDF_CONVERSION: (HDF / 60).toFixed(1),
-      HNF_CONVERSION: (HNF / 60).toFixed(1),
-      RNO_CONVERSION: (RNO / 60).toFixed(1),
-      totalHorasExtra: minutosAHHMMSS(totalHorasExtra),
-      totalHorasExtraDecimal: (totalHorasExtra / 60).toFixed(1),
-      Periodo: periodo,
-      cantidad_Trabajados
-    };
-
-    await new Reporte(reporte).save();
-
-    // ✅ Crear Excel
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Reporte Funcionario");
-
-    configurarColumnas(worksheet);
-    worksheet.addRow(reporte);
-    aplicarEstiloCabecera(worksheet);
-    aplicarEstiloFilas(worksheet);
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Reporte_${funcionario.identificacion}.xlsx`);
-
-    await workbook.xlsx.write(res);
-    res.end();
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ mensaje: 'Error generando el reporte', error: err.message });
-  }
+// Convierte HH:MM a minutos
+function convertirHorasAMinutos(hora) {
+  if (!hora || typeof hora !== "string") return 0;
+  const [h, m] = hora.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
 }
 
-// ✅ Generar reporte para TODOS los funcionarios
-async function generarTodosReporteController(req, res) {
+// Convierte minutos a HH:mm
+function minutosAHHMM(minutos) {
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+  return `${String(horas).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+}
+
+// ==============================
+// Crear reporte JSON y guardar en DB
+// ==============================
+async function crearReporte(req, res) {
   try {
-    const { fechaInicio, fechaFin, periodo } = req.query;
+    const { fechaInicio, fechaFin } = req.body;
+    if (!fechaInicio || !fechaFin)
+      return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
 
-    if (!fechaInicio || !fechaFin) {
-      return res.status(400).json({ mensaje: 'Campos obligatorios faltantes.' });
-    }
+    const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
+    const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
 
-    const fechaInicioDate = new Date(fechaInicio);
-    const fechaFinDate = new Date(fechaFin);
+    const extras = await HorasExtras.find({
+      fecha_inicio_trabajo: { $gte: inicio },
+      fecha_fin_trabajo: { $lte: fin }
+    }).populate('FuncionarioAsignado');
 
-    const funcionarios = await Funcionario.find();
-    if (funcionarios.length === 0) return res.status(404).json({ mensaje: 'No hay funcionarios registrados' });
+    if (!extras.length)
+      return res.json({ success: true, data: [], mensaje: "No hay horas extras en ese rango", diasConsultados: 0 });
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Reporte General");
-    configurarColumnas(worksheet);
+    const diasConsultados = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
 
-    for (const funcionario of funcionarios) {
-      const registros = await HorasExtras.find({
-        FuncionarioAsignado: funcionario._id,
-        $or: [
-          { fecha_inicio_trabajo: { $gte: fechaInicioDate, $lte: fechaFinDate } },
-          { fecha_fin_trabajo: { $gte: fechaInicioDate, $lte: fechaFinDate } }
-        ]
-      });
+    const reportesMap = {};
 
-      if (registros.length === 0) continue;
+    extras.forEach(e => {
+      if (!e.FuncionarioAsignado) return;
+      const id = e.FuncionarioAsignado._id.toString();
 
-      let HDO = 0, HENO = 0, HEDF = 0, HENF = 0, HDF = 0, HNF = 0, RNO = 0;
-      registros.forEach(r => {
-        HDO += convertirAHorasAMinutos(r.horas_ordinarias_diurnas);
-        HENO += convertirAHorasAMinutos(r.horas_ordinarias_nocturnas);
-        HEDF += convertirAHorasAMinutos(r.horas_dominicales_diurnas);
-        HENF += convertirAHorasAMinutos(r.horas_dominicales_nocturnas);
-        HDF += convertirAHorasAMinutos(r.horas_extras_diurnas);
-        HNF += convertirAHorasAMinutos(r.horas_extras_nocturnas);
-        RNO += convertirAHorasAMinutos(r.recargo_nocturno);
-      });
+      if (!reportesMap[id]) {
+        reportesMap[id] = {
+          identificacion_Funcionario: e.FuncionarioAsignado.identificacion_completa || e.FuncionarioAsignado.identificacion || "",
+          nombre_Funcionario: e.FuncionarioAsignado.nombre_completo || "",
+          HEDO: 0, HENO: 0, HEDF: 0, HENF: 0,
+          HDF: 0, HNF: 0, RNO: 0
+        };
+      }
 
-      const totalHorasExtra = HDO + HENO + HEDF + HENF + HDF + HNF + RNO;
-      const diffTime = fechaFinDate - fechaInicioDate;
-      const totalMinutes = Math.floor(diffTime / (1000 * 60));
-      const dias = Math.floor(totalMinutes / (60 * 24));
-      const horas = Math.floor((totalMinutes % (60 * 24)) / 60);
-      const minutos = totalMinutes % 60;
-      const cantidad_Trabajados = `${dias + 1}d ${horas}h ${minutos}m`;
+      reportesMap[id].HEDO += convertirHorasAMinutos(e.horas_ordinarias_diurnas);
+      reportesMap[id].HENO += convertirHorasAMinutos(e.horas_ordinarias_nocturnas);
+      reportesMap[id].HEDF += convertirHorasAMinutos(e.horas_extras_diurnas);
+      reportesMap[id].HENF += convertirHorasAMinutos(e.horas_extras_nocturnas);
+      reportesMap[id].HDF += convertirHorasAMinutos(e.horas_dominicales_diurnas);
+      reportesMap[id].HNF += convertirHorasAMinutos(e.horas_dominicales_nocturnas);
+      reportesMap[id].RNO += convertirHorasAMinutos(e.recargo_nocturno);
+    });
 
-      const reporte = {
-        identificacion_Funcionario: funcionario.identificacion,
-        nombre_Funcionario: funcionario.nombre_completo,
-        fechaInicioReporte: fechaInicio,
-        fechaFinReporte: fechaFin,
-        HDO_HORA: minutosAHHMMSS(HDO),
-        HENO_HORA: minutosAHHMMSS(HENO),
-        HEDF_HORA: minutosAHHMMSS(HEDF),
-        HENF_HORA: minutosAHHMMSS(HENF),
-        HDF_HORA: minutosAHHMMSS(HDF),
-        HNF_HORA: minutosAHHMMSS(HNF),
-        RNO_HORA: minutosAHHMMSS(RNO),
-        totalHorasExtra: minutosAHHMMSS(totalHorasExtra),
-        totalHorasExtraDecimal: (totalHorasExtra / 60).toFixed(1),
-        Periodo: periodo,
-        cantidad_Trabajados
+    const reportes = [];
+
+    for (const r of Object.values(reportesMap)) {
+      const totalExtras = r.HEDO + r.HENO + r.HEDF + r.HENF;
+      const totalSuplementarias = r.HDF + r.HNF + r.RNO;
+      const totalGeneral = totalExtras + totalSuplementarias;
+
+      const reporteItem = {
+        identificacion_Funcionario: r.identificacion_Funcionario,
+        nombre_Funcionario: r.nombre_Funcionario,
+        fechaInicioReporte: inicio,
+        fechaFinReporte: fin,
+        diasConsultados,
+        periodo: `${moment(inicio).format("DD/MM/YYYY")} - ${moment(fin).format("DD/MM/YYYY")}`,
+
+        // Horas en HH:MM
+        HEDO_HORA: minutosAHHMM(r.HEDO),
+        HENO_HORA: minutosAHHMM(r.HENO),
+        HEDF_HORA: minutosAHHMM(r.HEDF),
+        HENF_HORA: minutosAHHMM(r.HENF),
+        HDF_HORA: minutosAHHMM(r.HDF),
+        HNF_HORA: minutosAHHMM(r.HNF),
+        RNO_HORA: minutosAHHMM(r.RNO),
+        totalExtras_HHMM: minutosAHHMM(totalExtras),
+        totalSuplementarias_HHMM: minutosAHHMM(totalSuplementarias),
+        totalHoras_HHMM: minutosAHHMM(totalGeneral),
+
+        // Horas en decimales
+        HEDO_DEC: (r.HEDO / 60).toFixed(2),
+        HENO_DEC: (r.HENO / 60).toFixed(2),
+        HEDF_DEC: (r.HEDF / 60).toFixed(2),
+        HENF_DEC: (r.HENF / 60).toFixed(2),
+        HDF_DEC: (r.HDF / 60).toFixed(2),
+        HNF_DEC: (r.HNF / 60).toFixed(2),
+        RNO_DEC: (r.RNO / 60).toFixed(2),
+        totalExtras_DEC: (totalExtras / 60).toFixed(2),
+        totalSuplementarias_DEC: (totalSuplementarias / 60).toFixed(2),
+        totalHoras_DEC: (totalGeneral / 60).toFixed(2)
       };
 
-      worksheet.addRow(reporte);
+      await Reporte.create(reporteItem);
+      reportes.push(reporteItem);
     }
 
-    aplicarEstiloCabecera(worksheet);
-    aplicarEstiloFilas(worksheet);
+    res.json({ success: true, data: reportes, diasConsultados });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, mensaje: "Error creando reporte", error: err.message });
+  }
+}
+
+async function exportarReporteExcel(req, res) {
+  try {
+    const { fechaInicio, fechaFin } = req.body;
+    if (!fechaInicio || !fechaFin)
+      return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
+
+    const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
+    const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
+
+    // Traemos desde HorasExtras para consolidar
+    const extras = await HorasExtras.find({
+      fecha_inicio_trabajo: { $gte: inicio },
+      fecha_fin_trabajo: { $lte: fin }
+    }).populate('FuncionarioAsignado');
+
+    if (!extras.length)
+      return res.status(404).json({ mensaje: "No hay registros en ese rango" });
+
+    // =========================
+    // AGRUPAR POR FUNCIONARIO
+    // =========================
+    const reportesMap = {};
+
+    extras.forEach(e => {
+      if (!e.FuncionarioAsignado) return;
+      const id = e.FuncionarioAsignado._id.toString();
+
+      if (!reportesMap[id]) {
+        reportesMap[id] = {
+          identificacion: e.FuncionarioAsignado.identificacion_completa || e.FuncionarioAsignado.identificacion || "",
+          nombre: e.FuncionarioAsignado.nombre_completo || "",
+          HEDO: 0, HENO: 0, HEDF: 0, HENF: 0, HDF: 0, HNF: 0, RNO: 0
+        };
+      }
+
+      reportesMap[id].HEDO += convertirHorasAMinutos(e.horas_ordinarias_diurnas);
+      reportesMap[id].HENO += convertirHorasAMinutos(e.horas_ordinarias_nocturnas);
+      reportesMap[id].HEDF += convertirHorasAMinutos(e.horas_extras_diurnas);
+      reportesMap[id].HENF += convertirHorasAMinutos(e.horas_extras_nocturnas);
+      reportesMap[id].HDF += convertirHorasAMinutos(e.horas_dominicales_diurnas);
+      reportesMap[id].HNF += convertirHorasAMinutos(e.horas_dominicales_nocturnas);
+      reportesMap[id].RNO += convertirHorasAMinutos(e.recargo_nocturno);
+    });
+
+    const reportes = Object.values(reportesMap);
+
+    // =========================
+    // CREAR EXCEL
+    // =========================
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Reporte Horas Extras");
+
+    const titleRow = worksheet.addRow([`REPORTE HORAS EXTRAS DEL ${fechaInicio} AL ${fechaFin}`]);
+    worksheet.mergeCells(`A1:S1`);
+    titleRow.font = { size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.alignment = { horizontal: 'center' };
+    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
+    worksheet.addRow([]);
+
+    worksheet.addRow([
+      "Identificación", "Nombre",
+      "Horas HH:MM", "", "", "", "", "", "",
+      "Horas Decimales", "", "", "", "", "", "",
+      "Totales", "", ""
+    ]);
+
+    worksheet.addRow([
+      "", "",
+      "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO",
+      "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO",
+      "Extras", "Suplementarias", "General"
+    ]);
+
+    worksheet.mergeCells("A3:A4");
+    worksheet.mergeCells("B3:B4");
+    worksheet.mergeCells("C3:I3");
+    worksheet.mergeCells("J3:P3");
+    worksheet.mergeCells("Q3:S3");
+
+    const headerRows = [worksheet.getRow(3), worksheet.getRow(4)];
+    headerRows.forEach(row => {
+      row.font = { bold: true };
+      row.alignment = { horizontal: 'center', vertical: 'middle' };
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+    });
+
+    // =========================
+    // AGREGAR DATOS CONSOLIDADOS
+    // =========================
+    reportes.forEach(r => {
+      const totalExtras = r.HEDO + r.HENO + r.HEDF + r.HENF;
+      const totalSuplementarias = r.HDF + r.HNF + r.RNO;
+      const totalGeneral = totalExtras + totalSuplementarias;
+
+      worksheet.addRow([
+        r.identificacion,
+        r.nombre,
+        // HH:MM
+        minutosAHHMM(r.HEDO), minutosAHHMM(r.HENO), minutosAHHMM(r.HEDF), minutosAHHMM(r.HENF),
+        minutosAHHMM(r.HDF), minutosAHHMM(r.HNF), minutosAHHMM(r.RNO),
+        // DEC
+        (r.HEDO / 60).toFixed(2), (r.HENO / 60).toFixed(2), (r.HEDF / 60).toFixed(2), (r.HENF / 60).toFixed(2),
+        (r.HDF / 60).toFixed(2), (r.HNF / 60).toFixed(2), (r.RNO / 60).toFixed(2),
+        // Totales
+        (totalExtras / 60).toFixed(2), (totalSuplementarias / 60).toFixed(2), (totalGeneral / 60).toFixed(2)
+      ]);
+    });
+
+    worksheet.columns = [
+      { width: 18 }, { width: 30 },
+      { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 12 }, { width: 15 }, { width: 12 }
+    ];
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Reporte_General.xlsx`);
-
+    res.setHeader("Content-Disposition", `attachment; filename=Reporte_HorasExtras_${fechaInicio}_a_${fechaFin}.xlsx`);
     await workbook.xlsx.write(res);
     res.end();
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ mensaje: 'Error generando el reporte general', error: err.message });
+    res.status(500).json({ mensaje: "Error exportando Excel", error: err.message });
   }
 }
 
-// ✅ Helpers
-function convertirAHorasAMinutos(horaStr) {
-  if (!horaStr) return 0;
-  const [h, m] = horaStr.split(":").map(Number);
-  return h * 60 + m;
-}
 
-function minutosAHHMMSS(minutos) {
-  const h = Math.floor(minutos / 60);
-  const m = Math.floor(minutos % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-}
-
-function configurarColumnas(worksheet) {
-  worksheet.columns = [
-    { header: "Identificación", key: "identificacion_Funcionario", width: 20 },
-    { header: "Nombre", key: "nombre_Funcionario", width: 25 },
-    { header: "Fecha Inicio", key: "fechaInicioReporte", width: 15 },
-    { header: "Fecha Fin", key: "fechaFinReporte", width: 15 },
-    { header: "HDO", key: "HDO_HORA", width: 12 },
-    { header: "HENO", key: "HENO_HORA", width: 12 },
-    { header: "HEDF", key: "HEDF_HORA", width: 12 },
-    { header: "HENF", key: "HENF_HORA", width: 12 },
-    { header: "HDF", key: "HDF_HORA", width: 12 },
-    { header: "HNF", key: "HNF_HORA", width: 12 },
-    { header: "RNO", key: "RNO_HORA", width: 12 },
-    { header: "Total Extras", key: "totalHorasExtra", width: 18 },
-    { header: "Extras Decimal", key: "totalHorasExtraDecimal", width: 18 },
-    { header: "Periodo", key: "Periodo", width: 12 },
-    { header: "Tiempo Trabajado", key: "cantidad_Trabajados", width: 20 },
-  ];
-}
-
-function aplicarEstiloCabecera(worksheet) {
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 25;
-  headerRow.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: '1F4E78' } // Azul profesional
-    };
-    cell.border = {
-      top: { style: 'thin' },
-      left: { style: 'thin' },
-      bottom: { style: 'thin' },
-      right: { style: 'thin' }
-    };
-  });
-}
-
-function aplicarEstiloFilas(worksheet) {
-  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber !== 1) {
-      row.eachCell((cell) => {
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
-      });
-    }
-  });
-}
-
-module.exports = { generarReporteController, generarTodosReporteController };
+module.exports = { crearReporte, exportarReporteExcel };

@@ -1,106 +1,117 @@
 const express = require('express');
 const router = express.Router();
-const { crearExtras,eliminarExtras,updateExtra } = require('../controllers/Extras');
+const { crearExtras, eliminarExtras, updateExtra,listarExtras,
+    listarExtrasPorFechas,listarExtrasPorIdentificacion,exportarExtrasExcel } = require('../controllers/Extras');
 
-// Rutas
 /**
  * @swagger
- * /extras/crear:
+ * tags:
+ *   name: Extras
+ *   description: API para gestionar horas extras
+ */
+
+/**
+ * @swagger
+ * /api/extras:
  *   post:
- *     summary: Crear hora extra
+ *     summary: Crear un registro de horas extras
  *     tags: [Extras]
- *     description: Crea un nuevo registro de horas extra.
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               nombre_completo:
+ *               FuncionarioAsignado:
  *                 type: string
- *               identificacion:
+ *                 description: ID del funcionario
+ *               fecha_inicio_trabajo:
  *                 type: string
- *               tipoOperario:
+ *                 format: date
+ *               hora_inicio_trabajo:
  *                 type: string
- *                 enum: [operario1, operario2]
- *               cargo:
+ *                 example: "08:00"
+ *               fecha_fin_trabajo:
  *                 type: string
- *                 enum: [cargo1, cargo2]
- *               hora_inicio:
+ *                 format: date
+ *               hora_fin_trabajo:
  *                 type: string
- *               hora_fin:
- *                 type: string
+ *                 example: "18:00"
  *               hora_inicio_descanso:
  *                 type: string
+ *                 example: "12:00"
  *               hora_fin_descanso:
  *                 type: string
+ *                 example: "13:00"
  *     responses:
  *       201:
- *         description: Creado
- *       400:
- *         description: Error en datos
+ *         description: Registro creado correctamente
  */
-
 router.post('/crear', crearExtras);
 
 /**
  * @swagger
- * /extras/eliminar/{id}:
+ * /api/extras/{id}:
  *   delete:
- *     summary: Eliminar hora extra
+ *     summary: Eliminar un registro de horas extras
  *     tags: [Extras]
- *     description: Elimina un registro de horas extra por su ID.
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: ID del registro a eliminar
+ *         description: ID del registro
  *     responses:
  *       200:
  *         description: Eliminado correctamente
  *       404:
- *         description: Registro no encontrado
+ *         description: No encontrado
  */
-
-router.delete('/eliminar/:id',eliminarExtras)
+router.delete('/delete/:id', eliminarExtras);
 
 /**
  * @swagger
- * /extras/actualizar/{id}:
+ * /api/extras/{id}:
  *   put:
- *     summary: Actualizar hora extra
+ *     summary: Actualizar un registro de horas extras
  *     tags: [Extras]
- *     description: Actualiza un registro de horas extra por su ID.
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: ID del registro a actualizar
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               nombre_completo: { type: string }
- *               identificacion: { type: string }
- *               tipoOperario: { type: string, enum: [operario1, operario2] }
- *               cargo: { type: string, enum: [cargo1, cargo2] }
- *               hora_inicio: { type: string }
- *               hora_fin: { type: string }
- *               hora_inicio_descanso: { type: string }
- *               hora_fin_descanso: { type: string }
+ *               fecha_inicio_trabajo:
+ *                 type: string
+ *                 format: date
+ *               hora_inicio_trabajo:
+ *                 type: string
+ *               fecha_fin_trabajo:
+ *                 type: string
+ *                 format: date
+ *               hora_fin_trabajo:
+ *                 type: string
  *     responses:
- *       200: { description: Actualizado correctamente }
- *       400: { description: Error en datos }
- *       404: { description: Registro no encontrado }
+ *       200:
+ *         description: Actualizado correctamente
+ *       404:
+ *         description: No encontrado
  */
+router.put('/update/:id', updateExtra);
 
-router.put('/actualizar/:id',updateExtra)
+router.get('/listar',listarExtras)
 
-// Exportar router
+router.get('/funcionario', listarExtrasPorIdentificacion);
+router.get('/fechas', listarExtrasPorFechas);
+router.get('/exportar', exportarExtrasExcel);
+
+
 module.exports = router;

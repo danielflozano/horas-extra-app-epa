@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { crearFuncionario} = require('../controllers/Funcionario');
+const { crearFuncionario, listarFuncionarios } = require('../controllers/Funcionario');
 
-router.post('/crearFuncionario', crearFuncionario);
+router.post('/crearfuncionario', crearFuncionario);
+router.get('/', listarFuncionarios);
 
 module.exports = router;
