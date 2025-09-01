@@ -12,7 +12,7 @@ const { crearExtras, eliminarExtras, updateExtra,listarExtras,
 
 /**
  * @swagger
- * /api/extras:
+ * /api/extras/crear:
  *   post:
  *     summary: Crear un registro de horas extras
  *     tags: [Extras]
@@ -22,19 +22,32 @@ const { crearExtras, eliminarExtras, updateExtra,listarExtras,
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - FuncionarioAsignado
+ *               - fecha_inicio_trabajo
+ *               - hora_inicio_trabajo
+ *               - fecha_fin_trabajo
+ *               - hora_fin_trabajo
+ *               - hora_inicio_descanso
+ *               - hora_fin_descanso
+ *               - es_festivo_Fin
+ *               - es_festivo_Inicio
  *             properties:
  *               FuncionarioAsignado:
  *                 type: string
  *                 description: ID del funcionario
+ *                 example: "64d5f5a2b3c4a1e7f89c1234"
  *               fecha_inicio_trabajo:
  *                 type: string
  *                 format: date
+ *                 example: "2025-09-01"
  *               hora_inicio_trabajo:
  *                 type: string
  *                 example: "08:00"
  *               fecha_fin_trabajo:
  *                 type: string
  *                 format: date
+ *                 example: "2025-09-01"
  *               hora_fin_trabajo:
  *                 type: string
  *                 example: "18:00"
@@ -44,15 +57,24 @@ const { crearExtras, eliminarExtras, updateExtra,listarExtras,
  *               hora_fin_descanso:
  *                 type: string
  *                 example: "13:00"
+ *               es_festivo_Fin:
+ *                 type: boolean
+ *                 example: false
+ *               es_festivo_Inicio:
+ *                 type: boolean
+ *                 example: false
  *     responses:
  *       201:
  *         description: Registro creado correctamente
+ *       400:
+ *         description: Datos inválidos
  */
+
 router.post('/crear', crearExtras);
 
 /**
  * @swagger
- * /api/extras/{id}:
+ * /api/extras/delete/{id}:
  *   delete:
  *     summary: Eliminar un registro de horas extras
  *     tags: [Extras]
@@ -62,18 +84,19 @@ router.post('/crear', crearExtras);
  *         required: true
  *         schema:
  *           type: string
- *         description: ID del registro
+ *         description: ID del registro a eliminar
  *     responses:
  *       200:
  *         description: Eliminado correctamente
  *       404:
- *         description: No encontrado
+ *         description: Registro no encontrado
  */
+
 router.delete('/delete/:id', eliminarExtras);
 
 /**
  * @swagger
- * /api/extras/{id}:
+ * /api/extras/update/{id}:
  *   put:
  *     summary: Actualizar un registro de horas extras
  *     tags: [Extras]
@@ -83,7 +106,9 @@ router.delete('/delete/:id', eliminarExtras);
  *         required: true
  *         schema:
  *           type: string
+ *         description: ID del registro a actualizar
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
@@ -92,25 +117,123 @@ router.delete('/delete/:id', eliminarExtras);
  *               fecha_inicio_trabajo:
  *                 type: string
  *                 format: date
+ *                 example: "2025-09-01"
  *               hora_inicio_trabajo:
  *                 type: string
+ *                 example: "08:00"
  *               fecha_fin_trabajo:
  *                 type: string
  *                 format: date
+ *                 example: "2025-09-01"
  *               hora_fin_trabajo:
  *                 type: string
+ *                 example: "18:00"
  *     responses:
  *       200:
  *         description: Actualizado correctamente
  *       404:
- *         description: No encontrado
+ *         description: Registro no encontrado
  */
+
 router.put('/update/:id', updateExtra);
+
+/**
+ * @swagger
+ * /api/extras/listar:
+ *   get:
+ *     summary: Listar todos los registros de horas extras
+ *     tags: [Extras]
+ *     responses:
+ *       200:
+ *         description: Lista de registros obtenida correctamente
+ */
 
 router.get('/listar',listarExtras)
 
+/**
+ * @swagger
+ * /api/extras/funcionario:
+ *   get:
+ *     summary: Listar horas extras por identificación del funcionario
+ *     tags: [Extras]
+ *     parameters:
+ *       - in: query
+ *         name: identificacion
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificación del funcionario
+ *         example: "12345678"
+ *     responses:
+ *       200:
+ *         description: Lista filtrada por identificación
+ *       404:
+ *         description: No se encontraron registros
+ */
+
 router.get('/funcionario', listarExtrasPorIdentificacion);
+
+/**
+ * @swagger
+ * /api/extras/fechas:
+ *   get:
+ *     summary: Listar horas extras por rango de fechas
+ *     tags: [Extras]
+ *     parameters:
+ *       - in: query
+ *         name: fecha_inicio
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2025-08-01"
+ *       - in: query
+ *         name: fecha_fin
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2025-08-31"
+ *     responses:
+ *       200:
+ *         description: Lista filtrada por rango de fechas
+ *       404:
+ *         description: No se encontraron registros
+ */
+
 router.get('/fechas', listarExtrasPorFechas);
+
+/**
+ * @swagger
+ * /api/extras/exportar:
+ *   get:
+ *     summary: Exportar registros de horas extras a Excel
+ *     tags: [Extras]
+ *     parameters:
+ *       - in: query
+ *         name: fecha_inicio
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2025-08-01"
+ *       - in: query
+ *         name: fecha_fin
+ *         required: false
+ *         schema:
+ *           type: string
+ *           format: date
+ *         example: "2025-08-31"
+ *     responses:
+ *       200:
+ *         description: Archivo Excel generado
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+
 router.get('/exportar', exportarExtrasExcel);
 
 
