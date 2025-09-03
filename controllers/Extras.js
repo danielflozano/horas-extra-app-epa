@@ -4,7 +4,6 @@ const { calcularHorasExtras } = require('../helpers/CalculoHoras');
 const moment = require('moment');
 const ExcelJS = require('exceljs');
 
-// Crear registro
 const crearExtras = async (req, res) => {
   try {
     const data = req.body;
@@ -27,8 +26,14 @@ const crearExtras = async (req, res) => {
     ['fecha_inicio_trabajo','fecha_fin_trabajo','fecha_inicio_descanso','fecha_fin_descanso']
       .forEach(f => { if(data[f] && !moment(data[f],'YYYY-MM-DD',true).isValid()) throw new Error(`Fecha inválida: ${f}`) });
 
-    const existeFuncionario = await Funcionario.findById(data.FuncionarioAsignado);
-    if (!existeFuncionario) return res.status(400).json({ success: false, message: 'Funcionario no encontrado.' });
+    // ✅ Validar que el funcionario existe y está ACTIVO
+    const existeFuncionario = await Funcionario.findOne({
+      _id: data.FuncionarioAsignado,
+      estado: 'Activo'
+    });
+    if (!existeFuncionario) {
+      return res.status(400).json({ success: false, message: 'El funcionario no existe o está inactivo.' });
+    }
 
     // Ajuste fechas de trabajo
     let inicioTrabajo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
@@ -80,6 +85,7 @@ const crearExtras = async (req, res) => {
     res.status(500).json({ success:false, message:error.message });
   }
 };
+
 
 // Actualizar registro
 const updateExtra = async (req,res)=>{
