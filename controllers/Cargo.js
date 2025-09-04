@@ -16,7 +16,7 @@ const crearCargo = async (req, res) => {
 
 const listarCargos = async (req, res) => {
   try {
-    const cargos = await Cargo.find({}, 'name'); // solo enviar el nombre
+    const cargos = await Cargo.find({}, 'name');
     res.status(200).json({ success: true, data: cargos });
   } catch (err) {
     console.error(err);

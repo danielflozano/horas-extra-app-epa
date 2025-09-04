@@ -1,4 +1,5 @@
 const { Schema, model } = require('mongoose');
+const mongoose = require('mongoose');
 
 const ReporteSchema = Schema({
   identificacion_Funcionario: {
@@ -17,6 +18,13 @@ const ReporteSchema = Schema({
     type: Date,
     required: true
   },
+
+ tipoOperario:{
+ type: String,
+    enum: ['Planta', 'Temporal'],
+    required: true
+},
+
   // Extras HH:mm
   HEDO_HORA: { type: String, required: true },
   HENO_HORA: { type: String, required: true },

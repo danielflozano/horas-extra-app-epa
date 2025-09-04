@@ -122,7 +122,7 @@ const exportarExtrasExcel = async (req, res) => {
     const { identificacion, fechaInicio, fechaFin } = req.query;
     let query = {};
 
-    // 1️⃣ Filtrar por identificación si existe
+    // Filtrar por identificación si existe
     if (identificacion) {
       const func = await Funcionario.findOne({ identificacion });
       if (!func) {
@@ -138,7 +138,7 @@ const exportarExtrasExcel = async (req, res) => {
       query.FuncionarioAsignado = func._id;
     }
 
-    // 2️⃣ Filtrar por fechas si existen
+    //  Filtrar por fechas si existen
     if (fechaInicio && fechaFin) {
       const inicio = new Date(fechaInicio);
       const fin = new Date(fechaFin);
@@ -147,12 +147,12 @@ const exportarExtrasExcel = async (req, res) => {
       query.fecha_fin_trabajo = { $lte: fin };
     }
 
-    // 3️⃣ Buscar registros
+    //  Buscar registros
     const extras = await Extras.find(query)
       .populate({ path: 'FuncionarioAsignado', select: 'nombre_completo identificacion', populate: { path: 'Cargo', select: 'name' } })
       .sort({ fecha_inicio_trabajo: -1 });
 
-    // 4️⃣ Crear Excel
+    //  Crear Excel
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Horas Extras');
 
@@ -324,7 +324,7 @@ const listarExtrasPorFechas = async (req, res) => {
       })
       .sort({ fecha_inicio_trabajo: -1 });
 
-    // ✅ Ajuste: sumamos un día solo en la respuesta
+    // Ajuste: sumamos un día solo en la respuesta
     const data = extras.map((e) => {
       const inicio = e.fecha_inicio_trabajo
         ? new Date(e.fecha_inicio_trabajo.getTime() + 24 * 60 * 60 * 1000)

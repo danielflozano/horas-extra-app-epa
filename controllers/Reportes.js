@@ -14,45 +14,52 @@ function convertirHorasAMinutos(hora) {
 function minutosAHHMM(minutos) {
   const horas = Math.floor(minutos / 60);
   const mins = minutos % 60;
-  return `${String(horas).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+  return `${String(horas).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
-// ==============================
 // Crear reporte JSON y guardar en DB
-// ==============================
 async function crearReporte(req, res) {
   try {
-    const { fechaInicio, fechaFin } = req.body;
+    const { fechaInicio, fechaFin, tipoOperario } = req.body; // 👈 ahora recibimos tipoOperario también
     if (!fechaInicio || !fechaFin)
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
 
     const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
     const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
 
+    // Consulta con filtro por fechas y tipoOperario
     const extras = await HorasExtras.find({
       fecha_inicio_trabajo: { $gte: inicio },
       fecha_fin_trabajo: { $lte: fin }
-    }).populate('FuncionarioAsignado');
+    })
+      .populate({
+        path: "FuncionarioAsignado",
+        match: tipoOperario ? { tipoOperario } : {} // 👈 si envían tipoOperario lo filtra
+      });
 
-    if (!extras.length)
-      return res.json({ success: true, data: [], mensaje: "No hay horas extras en ese rango", diasConsultados: 0 });
+    // Filtrar los que no tengan funcionario asignado (por el match anterior puede quedar null)
+    const extrasFiltrados = extras.filter(e => e.FuncionarioAsignado);
+
+    if (!extrasFiltrados.length)
+      return res.json({ success: true, data: [], mensaje: "No hay horas extras en ese rango y tipoOperario", diasConsultados: 0 });
 
     const diasConsultados = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
 
     const reportesMap = {};
 
-    extras.forEach(e => {
-      if (!e.FuncionarioAsignado) return;
+    extrasFiltrados.forEach(e => {
       const id = e.FuncionarioAsignado._id.toString();
 
       if (!reportesMap[id]) {
         reportesMap[id] = {
           identificacion_Funcionario: e.FuncionarioAsignado.identificacion_completa || e.FuncionarioAsignado.identificacion || "",
           nombre_Funcionario: e.FuncionarioAsignado.nombre_completo || "",
+          tipoOperario: e.FuncionarioAsignado.tipoOperario || "",  
           HEDO: 0, HENO: 0, HEDF: 0, HENF: 0,
           HDF: 0, HNF: 0, RNO: 0
         };
       }
+
 
       reportesMap[id].HEDO += convertirHorasAMinutos(e.horas_ordinarias_diurnas);
       reportesMap[id].HENO += convertirHorasAMinutos(e.horas_ordinarias_nocturnas);
@@ -76,6 +83,7 @@ async function crearReporte(req, res) {
         fechaInicioReporte: inicio,
         fechaFinReporte: fin,
         diasConsultados,
+        tipoOperario: r.tipoOperario,
         periodo: `${moment(inicio).format("DD/MM/YYYY")} - ${moment(fin).format("DD/MM/YYYY")}`,
 
         // Horas en HH:MM
@@ -115,37 +123,40 @@ async function crearReporte(req, res) {
   }
 }
 
+
 async function exportarReporteExcel(req, res) {
   try {
-    const { fechaInicio, fechaFin } = req.body;
+    const { fechaInicio, fechaFin, tipoOperario } = req.body;
     if (!fechaInicio || !fechaFin)
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
 
     const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
     const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
 
-    // Traemos desde HorasExtras para consolidar
+    // Traemos desde HorasExtras filtrando por tipoOperario
     const extras = await HorasExtras.find({
       fecha_inicio_trabajo: { $gte: inicio },
       fecha_fin_trabajo: { $lte: fin }
-    }).populate('FuncionarioAsignado');
+    }).populate({
+      path: "FuncionarioAsignado",
+      match: tipoOperario ? { tipoOperario } : {}
+    });
 
-    if (!extras.length)
-      return res.status(404).json({ mensaje: "No hay registros en ese rango" });
+    // Filtramos los funcionarios null (por el match de arriba)
+    const extrasFiltrados = extras.filter(e => e.FuncionarioAsignado);
+    if (!extrasFiltrados.length)
+      return res.status(404).json({ mensaje: "No hay registros en ese rango y tipoOperario" });
 
-    // =========================
     // AGRUPAR POR FUNCIONARIO
-    // =========================
     const reportesMap = {};
-
-    extras.forEach(e => {
-      if (!e.FuncionarioAsignado) return;
+    extrasFiltrados.forEach(e => {
       const id = e.FuncionarioAsignado._id.toString();
 
       if (!reportesMap[id]) {
         reportesMap[id] = {
           identificacion: e.FuncionarioAsignado.identificacion_completa || e.FuncionarioAsignado.identificacion || "",
           nombre: e.FuncionarioAsignado.nombre_completo || "",
+          tipoOperario: e.FuncionarioAsignado.tipoOperario || "",
           HEDO: 0, HENO: 0, HEDF: 0, HENF: 0, HDF: 0, HNF: 0, RNO: 0
         };
       }
@@ -161,27 +172,26 @@ async function exportarReporteExcel(req, res) {
 
     const reportes = Object.values(reportesMap);
 
-    // =========================
     // CREAR EXCEL
-    // =========================
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Reporte Horas Extras");
 
-    const titleRow = worksheet.addRow([`REPORTE HORAS EXTRAS DEL ${fechaInicio} AL ${fechaFin}`]);
+    // ======= TÍTULO =======
+    const titleRow = worksheet.addRow([`REPORTE HORAS EXTRAS DEL ${fechaInicio} AL ${fechaFin}${tipoOperario ? " - " + tipoOperario : ""}`]);
     worksheet.mergeCells(`A1:S1`);
-    titleRow.font = { size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleRow.alignment = { horizontal: 'center' };
-    titleRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
+    titleRow.getCell(1).font = { size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleRow.getCell(1).alignment = { horizontal: 'center' };
+    titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } };
     worksheet.addRow([]);
 
-    worksheet.addRow([
+    // ======= CABECERAS =======
+    const header1 = worksheet.addRow([
       "Identificación", "Nombre",
       "Horas HH:MM", "", "", "", "", "", "",
       "Horas Decimales", "", "", "", "", "", "",
       "Totales", "", ""
     ]);
-
-    worksheet.addRow([
+    const header2 = worksheet.addRow([
       "", "",
       "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO",
       "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO",
@@ -194,22 +204,28 @@ async function exportarReporteExcel(req, res) {
     worksheet.mergeCells("J3:P3");
     worksheet.mergeCells("Q3:S3");
 
-    const headerRows = [worksheet.getRow(3), worksheet.getRow(4)];
-    headerRows.forEach(row => {
-      row.font = { bold: true };
-      row.alignment = { horizontal: 'center', vertical: 'middle' };
-      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+    // Estilo cabeceras (solo en las celdas con texto)
+    [header1, header2].forEach(row => {
+      row.eachCell(cell => {
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } },
+        };
+      });
     });
 
-    // =========================
-    // AGREGAR DATOS CONSOLIDADOS
-    // =========================
+    // ======= DATOS =======
     reportes.forEach(r => {
       const totalExtras = r.HEDO + r.HENO + r.HEDF + r.HENF;
       const totalSuplementarias = r.HDF + r.HNF + r.RNO;
       const totalGeneral = totalExtras + totalSuplementarias;
 
-      worksheet.addRow([
+      const dataRow = worksheet.addRow([
         r.identificacion,
         r.nombre,
         // HH:MM
@@ -221,8 +237,20 @@ async function exportarReporteExcel(req, res) {
         // Totales
         (totalExtras / 60).toFixed(2), (totalSuplementarias / 60).toFixed(2), (totalGeneral / 60).toFixed(2)
       ]);
+
+      // Bordes y alineación para cada celda de datos
+      dataRow.eachCell(cell => {
+        cell.alignment = { horizontal: 'center' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } },
+        };
+      });
     });
 
+    // ======= ANCHOS =======
     worksheet.columns = [
       { width: 18 }, { width: 30 },
       { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
@@ -230,8 +258,9 @@ async function exportarReporteExcel(req, res) {
       { width: 12 }, { width: 15 }, { width: 12 }
     ];
 
+    // ======= EXPORTAR =======
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Reporte_HorasExtras_${fechaInicio}_a_${fechaFin}.xlsx`);
+    res.setHeader("Content-Disposition", `attachment; filename=Reporte_HorasExtras_${fechaInicio}_a_${fechaFin}${tipoOperario ? "_" + tipoOperario : ""}.xlsx`);
     await workbook.xlsx.write(res);
     res.end();
 
@@ -240,6 +269,7 @@ async function exportarReporteExcel(req, res) {
     res.status(500).json({ mensaje: "Error exportando Excel", error: err.message });
   }
 }
+
 
 
 module.exports = { crearReporte, exportarReporteExcel };
