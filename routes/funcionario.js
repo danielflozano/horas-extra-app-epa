@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { crearFuncionario, listarFuncionarios, actualizarFuncionario,obtenerFuncionarioPorId } = require('../controllers/Funcionario');
+const { crearFuncionario, listarFuncionarios, actualizarFuncionario,obtenerFuncionarioPorId, listarFuncionariosActivos} = require('../controllers/Funcionario');
 
 /**
  * @swagger
@@ -80,7 +80,11 @@ router.get('/', listarFuncionarios);
 
 router.put('/actualizar/:id', actualizarFuncionario);
 
-router.get('/:id', obtenerFuncionarioPorId);
+
+router.get('/obtener/:id', obtenerFuncionarioPorId);
+
+
+router.get('/Activos', listarFuncionariosActivos)
 
 
 module.exports = router;

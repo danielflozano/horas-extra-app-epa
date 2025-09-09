@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { crearCargo, listarCargos } = require('../controllers/Cargo');
+const { crearCargo, listarCargos ,eliminarCargo} = require('../controllers/Cargo');
 
 /**
  * @swagger
@@ -62,5 +62,8 @@ router.post('/crearCargo', crearCargo);
  *             
  */
 router.get('/listar', listarCargos);
+
+
+router.delete('/delete', eliminarCargo)
 
 module.exports = router;
