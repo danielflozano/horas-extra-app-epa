@@ -19,14 +19,14 @@ const crearExtras = async (req, res) => {
 
     // Validar formato hora
     const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    ['hora_inicio_trabajo','hora_fin_trabajo','hora_inicio_descanso','hora_fin_descanso']
-      .forEach(c => { if(data[c] && !horaRegex.test(data[c])) throw new Error(`Formato inválido en ${c}`) });
+    ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso']
+      .forEach(c => { if (data[c] && !horaRegex.test(data[c])) throw new Error(`Formato inválido en ${c}`) });
 
     // Validar fechas
-    ['fecha_inicio_trabajo','fecha_fin_trabajo','fecha_inicio_descanso','fecha_fin_descanso']
-      .forEach(f => { if(data[f] && !moment(data[f],'YYYY-MM-DD',true).isValid()) throw new Error(`Fecha inválida: ${f}`) });
+    ['fecha_inicio_trabajo', 'fecha_fin_trabajo', 'fecha_inicio_descanso', 'fecha_fin_descanso']
+      .forEach(f => { if (data[f] && !moment(data[f], 'YYYY-MM-DD', true).isValid()) throw new Error(`Fecha inválida: ${f}`) });
 
-    // ✅ Validar que el funcionario existe y está ACTIVO
+    //  Validar que el funcionario existe y está ACTIVO
     const existeFuncionario = await Funcionario.findOne({
       _id: data.FuncionarioAsignado,
       estado: 'Activo'
@@ -41,33 +41,66 @@ const crearExtras = async (req, res) => {
     if (finTrabajo.isBefore(inicioTrabajo)) finTrabajo.add(1, 'day');
 
     // Validar descanso
-    if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso){
+    if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso) {
       let inicioDesc = moment(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}`);
       let finDesc = moment(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}`);
-      if(finDesc.isBefore(inicioDesc)) finDesc.add(1,'day');
-      if(inicioDesc.isBefore(inicioTrabajo) || finDesc.isAfter(finTrabajo)) 
-        return res.status(400).json({ success:false, message:'Descanso fuera del rango de trabajo' });
-      if(finDesc.diff(inicioDesc,'minutes')>480)
-        return res.status(400).json({ success:false, message:'Descanso > 8h' });
+      if (finDesc.isBefore(inicioDesc)) finDesc.add(1, 'day');
+      if (inicioDesc.isBefore(inicioTrabajo) || finDesc.isAfter(finTrabajo))
+        return res.status(400).json({ success: false, message: 'Descanso fuera del rango de trabajo' });
+      if (finDesc.diff(inicioDesc, 'minutes') > 480)
+        return res.status(400).json({ success: false, message: 'Descanso > 8h' });
     }
 
-    // Validar solapamiento de registros
-    const existeRegistro = await Extras.findOne({
-      FuncionarioAsignado:data.FuncionarioAsignado,
-      $or:[{
-        $and:[
-          {fecha_inicio_trabajo:{$lte:data.fecha_fin_trabajo}},
-          {fecha_fin_trabajo:{$gte:data.fecha_inicio_trabajo}}
-        ]
-      }]
-    });
-    if(existeRegistro) return res.status(400).json({ success:false, message:'Registro se solapa' });
+    // helper: acepta fecha (Date o "YYYY-MM-DD") y hora ("HH:mm")
+    function parseDateTime(fecha, hora) {
+      const fechaObj = fecha instanceof Date ? fecha : new Date(fecha); // fecha puede ser Date o string
+      const year = fechaObj.getFullYear();
+      const month = fechaObj.getMonth(); // 0-based
+      const day = fechaObj.getDate();
+      let hour = 0, minute = 0;
+      if (hora && typeof hora === 'string') {
+        const parts = hora.trim().split(':').map(Number);
+        hour = Number.isFinite(parts[0]) ? parts[0] : 0;
+        minute = Number.isFinite(parts[1]) ? parts[1] : 0;
+      }
+      return new Date(year, month, day, hour, minute, 0, 0);
+    }
 
+    // Construir rango del nuevo registro
+    const inicioNuevo = parseDateTime(data.fecha_inicio_trabajo, data.hora_inicio_trabajo);
+    const finNuevo = parseDateTime(data.fecha_fin_trabajo, data.hora_fin_trabajo);
+
+    // validación básica de coherencia
+    if (!(inicioNuevo < finNuevo)) {
+      return res.status(400).json({ success: false, message: 'Rango inválido: la fecha/hora de inicio debe ser anterior a la de fin' });
+    }
+
+    // Buscar candidatos por ventana de fechas (filtro amplio para no traer TODA la colección)
+    const filtro = {
+      FuncionarioAsignado: data.FuncionarioAsignado,
+      fecha_inicio_trabajo: { $lte: data.fecha_fin_trabajo },
+      fecha_fin_trabajo: { $gte: data.fecha_inicio_trabajo }
+    };
+    // si estás actualizando un documento, excluirte a ti mismo:
+    if (data._id) filtro._id = { $ne: data._id };
+
+    const candidatos = await Extras.find(filtro).lean();
+
+    // Revisar uno a uno con horas
+    for (const c of candidatos) {
+      const inicioExistente = parseDateTime(c.fecha_inicio_trabajo, c.hora_inicio_trabajo);
+      const finExistente = parseDateTime(c.fecha_fin_trabajo, c.hora_fin_trabajo);
+
+      // condición de solapamiento (note: igualdad en los límites NO es solapamiento)
+      if (inicioNuevo < finExistente && finNuevo > inicioExistente) {
+        return res.status(400).json({ success: false, message: 'Registro se solapa' });
+      }
+    }
     // Validación mínima 8h (lunes-sábado)
-    const minutosEfectivos = finTrabajo.diff(inicioTrabajo,'minutes');
+    const minutosEfectivos = finTrabajo.diff(inicioTrabajo, 'minutes');
     const diaSemana = inicioTrabajo.isoWeekday();
-    if((diaSemana>=1 && diaSemana<=6) && !data.es_festivo_Inicio && minutosEfectivos<480)
-      return res.status(400).json({ success:false, message:'Mínimo 8h efectivas' });
+    if ((diaSemana >= 1 && diaSemana <= 6) && !data.es_festivo_Inicio && minutosEfectivos < 480)
+      return res.status(400).json({ success: false, message: 'Mínimo 8h efectivas' });
 
     // Calcular horas extras
     const calculos = calcularHorasExtras(data);
@@ -76,44 +109,43 @@ const crearExtras = async (req, res) => {
     if (!calculos.success) return res.status(400).json(calculos);
 
     // Guardar registro
-    const nuevaExtra = new Extras({...data, ...calculos});
+    const nuevaExtra = new Extras({ ...data, ...calculos });
     await nuevaExtra.save();
 
-    res.status(201).json({ success:true, message:'Registro creado', data:nuevaExtra });
+    res.status(201).json({ success: true, message: 'Registro creado', data: nuevaExtra });
 
   } catch (error) {
-    res.status(500).json({ success:false, message:error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-
 // Actualizar registro
-const updateExtra = async (req,res)=>{
-  try{
-    const {id} = req.params;
+const updateExtra = async (req, res) => {
+  try {
+    const { id } = req.params;
     const nuevosDatos = req.body;
     const extra = await Extras.findById(id);
-    if(!extra) return res.status(404).json({ success:false, message:'No encontrado' });
+    if (!extra) return res.status(404).json({ success: false, message: 'No encontrado' });
 
-    const camposClave = ['fecha_inicio_trabajo','hora_inicio_trabajo','fecha_fin_trabajo','hora_fin_trabajo','fecha_inicio_descanso','hora_inicio_descanso','fecha_fin_descanso','hora_fin_descanso'];
+    const camposClave = ['fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo', 'fecha_inicio_descanso', 'hora_inicio_descanso', 'fecha_fin_descanso', 'hora_fin_descanso'];
     let recalcular = false;
 
-    for(let campo in nuevosDatos){
-      if(extra[campo]!==undefined && extra[campo]!==nuevosDatos[campo]){
-        extra[campo]=nuevosDatos[campo];
-        if(camposClave.includes(campo)) recalcular=true;
+    for (let campo in nuevosDatos) {
+      if (extra[campo] !== undefined && extra[campo] !== nuevosDatos[campo]) {
+        extra[campo] = nuevosDatos[campo];
+        if (camposClave.includes(campo)) recalcular = true;
       }
     }
 
-    if(recalcular){
+    if (recalcular) {
       const calculos = calcularHorasExtras(extra.toObject());
       Object.assign(extra, calculos);
     }
 
     await extra.save();
-    res.status(200).json({ success:true, message:'Registro actualizado', data:extra });
-  }catch(error){
-    res.status(500).json({ success:false, message:error.message });
+    res.status(200).json({ success: true, message: 'Registro actualizado', data: extra });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -121,7 +153,6 @@ const exportarExtrasExcel = async (req, res) => {
   try {
     const { identificacion, fechaInicio, fechaFin } = req.query;
     let query = {};
-
     // Filtrar por identificación si existe
     if (identificacion) {
       const func = await Funcionario.findOne({ identificacion });
@@ -142,7 +173,7 @@ const exportarExtrasExcel = async (req, res) => {
     if (fechaInicio && fechaFin) {
       const inicio = new Date(fechaInicio);
       const fin = new Date(fechaFin);
-      fin.setHours(23,59,59,999); // Incluir todo el día final
+      fin.setHours(23, 59, 59, 999); // Incluir todo el día final
       query.fecha_inicio_trabajo = { $gte: inicio };
       query.fecha_fin_trabajo = { $lte: fin };
     }
@@ -164,7 +195,7 @@ const exportarExtrasExcel = async (req, res) => {
       { header: 'Hora Inicio', key: 'horaInicio', width: 10 },
       { header: 'Fecha Fin', key: 'fechaFin', width: 15 },
       { header: 'Hora Fin', key: 'horaFin', width: 10 },
-      { header: 'HDO', key: 'HDO', width: 10 },
+      { header: 'HEDO', key: 'HEDO', width: 10 },
       { header: 'HENO', key: 'HENO', width: 10 },
       { header: 'HEDF', key: 'HEDF', width: 10 },
       { header: 'HENF', key: 'HENF', width: 10 },
@@ -186,13 +217,13 @@ const exportarExtrasExcel = async (req, res) => {
           horaInicio: e.hora_inicio_trabajo || '',
           fechaFin: e.fecha_fin_trabajo ? e.fecha_fin_trabajo.toLocaleDateString() : '',
           horaFin: e.hora_fin_trabajo || '',
-          HDO: e.horas_ordinarias_diurnas || 0,
-          HENO: e.horas_ordinarias_nocturnas || 0,
-          HEDF: e.horas_dominicales_diurnas || 0,
-          HENF: e.horas_dominicales_nocturnas || 0,
-          HDF: e.horas_extras_diurnas || 0,
-          HNF: e.horas_extras_nocturnas || 0,
-          RNO: e.recargo_nocturno || 0,
+          HEDO: e.HEDO || 0,
+          HENO: e.HENO || 0,
+          HEDF: e.HEDF || 0,
+          HENF: e.HENF || 0,
+          HDF: e.HDF || 0,
+          HNF: e.HNF || 0,
+          RNO: e.RNO || 0,
           total: e.horas_extras || 0,
         });
       });
@@ -205,20 +236,20 @@ const exportarExtrasExcel = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success:false, message:'Error al generar Excel' });
+    res.status(500).json({ success: false, message: 'Error al generar Excel' });
   }
 };
 
 
 // Eliminar registro
-const eliminarExtras = async (req,res)=>{
-  try{
-    const {id}=req.params;
+const eliminarExtras = async (req, res) => {
+  try {
+    const { id } = req.params;
     const extra = await Extras.findByIdAndDelete(id);
-    if(!extra) return res.status(404).json({ success:false, message:'No encontrado' });
-    res.status(200).json({ success:true, message:'Registro eliminado', data:extra });
-  }catch(error){
-    res.status(500).json({ success:false, message:error.message });
+    if (!extra) return res.status(404).json({ success: false, message: 'No encontrado' });
+    res.status(200).json({ success: true, message: 'Registro eliminado', data: extra });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -353,6 +384,6 @@ module.exports = {
   eliminarExtras,
   listarExtras,
   listarExtrasPorIdentificacion,
-  listarExtrasPorFechas, 
+  listarExtrasPorFechas,
   exportarExtrasExcel
 };

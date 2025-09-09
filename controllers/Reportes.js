@@ -61,13 +61,13 @@ async function crearReporte(req, res) {
       }
 
 
-      reportesMap[id].HEDO += convertirHorasAMinutos(e.horas_ordinarias_diurnas);
-      reportesMap[id].HENO += convertirHorasAMinutos(e.horas_ordinarias_nocturnas);
-      reportesMap[id].HEDF += convertirHorasAMinutos(e.horas_extras_diurnas);
-      reportesMap[id].HENF += convertirHorasAMinutos(e.horas_extras_nocturnas);
-      reportesMap[id].HDF += convertirHorasAMinutos(e.horas_dominicales_diurnas);
-      reportesMap[id].HNF += convertirHorasAMinutos(e.horas_dominicales_nocturnas);
-      reportesMap[id].RNO += convertirHorasAMinutos(e.recargo_nocturno);
+      reportesMap[id].HEDO += convertirHorasAMinutos(e.HEDO);
+      reportesMap[id].HENO += convertirHorasAMinutos(e.HENO);
+      reportesMap[id].HEDF += convertirHorasAMinutos(e.HEDF);
+      reportesMap[id].HENF += convertirHorasAMinutos(e.HENF);
+      reportesMap[id].HDF += convertirHorasAMinutos(e.HDF);
+      reportesMap[id].HNF += convertirHorasAMinutos(e.HNF);
+      reportesMap[id].RNO += convertirHorasAMinutos(e.RNO);
     });
 
     const reportes = [];

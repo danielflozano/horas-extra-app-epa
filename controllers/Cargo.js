@@ -3,6 +3,17 @@ const Cargo = require('../models/cargo');
 const crearCargo = async (req, res) => {
   try {
     const { name } = req.body;
+
+    const existente = await Cargo.findOne({ name: new RegExp(`^${name}$`, "i") });
+
+    if (existente) {
+      return res.status(400).json({
+        success: false,
+        message: "Ya existe el cargo"
+      });
+    }
+
+
     if (!name) return res.status(400).json({ success: false, message: 'El nombre del cargo es obligatorio.' });
 
     const nuevoCargo = new Cargo({ name });
