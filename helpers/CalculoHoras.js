@@ -14,33 +14,39 @@ function calcularHorasExtras({
 }) {
   const inicioTotal = moment(`${fecha_inicio_trabajo} ${hora_inicio_trabajo}`, 'YYYY-MM-DD HH:mm');
   let finTotal = moment(`${fecha_fin_trabajo} ${hora_fin_trabajo}`, 'YYYY-MM-DD HH:mm');
-  if (finTotal.isBefore(inicioTotal)) finTotal.add(1, 'day'); // Cruce de medianoche
+  if (finTotal.isBefore(inicioTotal)) finTotal.add(1, 'day'); // Cruce medianoche
 
-  const descansoInicio = fecha_inicio_descanso && hora_inicio_descanso
+  const descansoInicio = fecha_inicio_descanso && hora_inicio_descanso 
     ? moment(`${fecha_inicio_descanso} ${hora_inicio_descanso}`, 'YYYY-MM-DD HH:mm')
     : null;
-  const descansoFin = fecha_fin_descanso && hora_fin_descanso
+  const descansoFin = fecha_fin_descanso && hora_fin_descanso 
     ? moment(`${fecha_fin_descanso} ${hora_fin_descanso}`, 'YYYY-MM-DD HH:mm')
     : null;
 
-  let HDO = 0, HENO = 0, HDF = 0, HNF = 0, HEDF = 0, HENF = 0, RNO = 0;
+  // Acumuladores de minutos
+  let HDO = 0, HNO = 0, HEDO = 0, HENO = 0;
+  let HDF = 0, HNF = 0, HEDF = 0, HENF = 0;
+  let RNO = 0;
   let totalMinutosTrabajados = 0, totalMinutosDescanso = 0;
   let es_fin_de_semana = false;
 
+  let minutosOrdinariosGlobales = 0;
+
+  let diaActual = "";
+
   let cursor = moment(inicioTotal);
-  let diaActual = cursor.format('YYYY-MM-DD');
-  let minutosOrdinariosDia = 0;
 
   while (cursor.isBefore(finTotal)) {
     const siguiente = moment(cursor).add(1, 'minute');
+    const fechaCursor = cursor.format('YYYY-MM-DD');
 
-    // Reinicia contador de ordinarias al cambiar de día
-    if (cursor.format('YYYY-MM-DD') !== diaActual) {
-      diaActual = cursor.format('YYYY-MM-DD');
+    // Resetear contador al cambiar de día
+    if (fechaCursor !== diaActual) {
+      diaActual = fechaCursor;
       minutosOrdinariosDia = 0;
     }
 
-    // Descanso
+    // Saltar descanso
     if (descansoInicio && descansoFin && cursor.isBetween(descansoInicio, descansoFin, null, '[)')) {
       totalMinutosDescanso++;
       cursor = siguiente;
@@ -49,39 +55,63 @@ function calcularHorasExtras({
 
     totalMinutosTrabajados++;
 
-    // Recargo nocturno
     const hora = cursor.hour();
-    const esNocturno = hora >= 21 || hora < 6;
-    if (esNocturno) RNO++;
+    const esNocturno = hora >= 18 || hora < 6;
 
-    // Determinar tipo de día
-    const diaSemana = cursor.isoWeekday(); // 1=Lunes ... 7=Domingo
+    // Tipo de día
+    const diaSemana = cursor.isoWeekday();
     let esFestivo = false;
     if (cursor.isSame(moment(fecha_inicio_trabajo), 'day')) esFestivo = es_festivo_Inicio;
     if (cursor.isSame(moment(fecha_fin_trabajo), 'day')) esFestivo = es_festivo_Fin;
 
-    const esDominical = esFestivo || diaSemana === 7;
     if (diaSemana === 7) es_fin_de_semana = true;
 
-    // Asignar minutos
-    if (esDominical) {
-      if (esNocturno) HENF++;
-      else HEDF++;
-    } else {
-      // Ordinarias primeras 8h por día (480 min)
-      if (minutosOrdinariosDia < 480) {
-        if (esNocturno) HENO++;
-        else HDO++;
-        minutosOrdinariosDia++;
-      } else {
-        if (esNocturno) HNF++;
-        else HDF++;
-      }
-    }
-
-    cursor = siguiente;
+    // Solo las primeras 8 horas del turno (480 min) se cuentan como ordinarias
+let esOrdinario = false;
+  if (minutosOrdinariosGlobales < 480) {
+    esOrdinario = true;
+    minutosOrdinariosGlobales++; // Solo aumenta si realmente es ordinario
   }
 
+  // Clasificación según tipo de día y horario
+  if (esFestivo || diaSemana === 7) {
+    if (esNocturno) {
+      if (esOrdinario) {
+        HNF++;
+      } else {
+        HENF++;
+      }
+    } else {
+      if (esOrdinario) {
+        HDF++;
+      } else {
+        HEDF++;
+      }
+    }
+  } else {
+    if (esNocturno) {
+      if (esOrdinario) {
+        HNO++;
+      } else {
+        HENO++;
+      }
+    } else {
+      if (esOrdinario) {
+        HDO++;
+      } else {
+        HEDO++;
+      }
+    }
+  }
+
+  // Recargo nocturno: SOLO cuenta en ordinarias nocturnas
+  if (esNocturno && esOrdinario) {
+    RNO++;
+  }
+
+  cursor = siguiente;
+}
+  // Función formato HH:MM
   function formato(minutos) {
     const h = Math.floor(minutos / 60);
     const m = minutos % 60;
@@ -92,14 +122,16 @@ function calcularHorasExtras({
     success: true,
     horas_trabajadas: formato(totalMinutosTrabajados),
     horas_descanso: formato(totalMinutosDescanso),
-    horas_ordinarias_diurnas: formato(HDO),
-    horas_ordinarias_nocturnas: formato(HENO),
-    horas_extras_diurnas: formato(HDF),
-    horas_extras_nocturnas: formato(HNF),
-    horas_dominicales_diurnas: formato(HEDF),
-    horas_dominicales_nocturnas: formato(HENF),
-    horas_extras: formato(HDF + HNF + HEDF + HENF),
-    recargo_nocturno: formato(RNO),
+    HDO: formato(HDO),
+    HNO: formato(HNO),
+    HEDO: formato(HEDO),
+    HENO: formato(HENO),
+    HDF: formato(HDF),
+    HNF: formato(HNF),
+    HEDF: formato(HEDF),
+    HENF: formato(HENF),
+    horas_extras: formato(HEDO + HENO + HEDF + HENF),
+    RNO: formato(RNO),
     es_fin_de_semana
   };
 }

@@ -6,6 +6,7 @@ const FuncionarioSchema = Schema({
     identificacion: { type: String, required: true },
     tipoOperario: { type: String, enum: ['Planta', 'Temporal'], required: true },
     Cargo: { type: mongoose.Schema.Types.ObjectId, ref: 'Cargo', required: true },
+    estado:{ type: String, enum: ['Activo', 'Inactivo'], default: 'Activo' }
 });
 
 module.exports = model( 'Funcionario', FuncionarioSchema );
