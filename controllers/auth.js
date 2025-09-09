@@ -21,8 +21,8 @@ const crearUsuario = async( req, res = response ) => {
     usuario = new Usuario( req.body );
 
     // Encriptar contraseña
-    const salt = bcrypt.genSaltSync();
-    usuario.password = bcrypt.hashSync( password, salt );
+    const salt = await bcrypt.genSalt();
+    usuario.password = await bcrypt.hash( password, salt );
   
     await usuario.save();
 
@@ -58,25 +58,25 @@ const loginUsuario = async( req, res = response ) => {
     if ( !usuario ) {
       return res.status(400).json({
         ok: false,
-        msg: 'El usuario no existe con ese Email'
+        msg: 'Credenciales inválidas'
       });
     }
     
     // Confirmar los Passwords
     
-    const validPassword = bcrypt.compareSync( password, usuario.password );
+    const validPassword = await bcrypt.compare( password, usuario.password );
 
     if( !validPassword ) {
-      res.status(400).json({
+      return res.status(400).json({
         ok: false,
-        msg: 'Contraseña incorrecta'
+        msg: 'Credenciales inválidas'
       })
     }
 
     // Generar JWT
     const token = await generarJWT( usuario.id, usuario.name );
 
-    res.status(201).json({
+    res.status(200).json({
       ok: true,
       uid: usuario.id,
       name: usuario.name,
@@ -94,7 +94,6 @@ const loginUsuario = async( req, res = response ) => {
 
 }
 
-
 const revalidarToken = async( req, res = response ) => {
 
   const { uid, name } = req
@@ -106,7 +105,9 @@ const revalidarToken = async( req, res = response ) => {
   
     res.json({
       ok: true,
-      token
+      uid: uid,
+      name: name,
+      token: token
     });
 
   } catch (error) {
