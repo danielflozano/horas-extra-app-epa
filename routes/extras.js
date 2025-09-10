@@ -25,42 +25,52 @@ const { crearExtras, eliminarExtras, updateExtra,listarExtras,
  *             required:
  *               - FuncionarioAsignado
  *               - fecha_inicio_trabajo
- *               - hora_inicio_trabajo
  *               - fecha_fin_trabajo
+ *               - hora_inicio_trabajo
  *               - hora_fin_trabajo
- *               - hora_inicio_descanso
- *               - hora_fin_descanso
- *               - es_festivo_Fin
- *               - es_festivo_Inicio
  *             properties:
  *               FuncionarioAsignado:
  *                 type: string
- *                 description: ID del funcionario
+ *                 description: ID del funcionario (ObjectId)
  *                 example: "64d5f5a2b3c4a1e7f89c1234"
  *               fecha_inicio_trabajo:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-09-01"
+ *               fecha_fin_trabajo:
  *                 type: string
  *                 format: date
  *                 example: "2025-09-01"
  *               hora_inicio_trabajo:
  *                 type: string
  *                 example: "08:00"
- *               fecha_fin_trabajo:
- *                 type: string
- *                 format: date
- *                 example: "2025-09-01"
  *               hora_fin_trabajo:
  *                 type: string
  *                 example: "18:00"
+ *               fecha_inicio_descanso:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-09-01"
+ *               fecha_fin_descanso:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-09-01"
  *               hora_inicio_descanso:
  *                 type: string
  *                 example: "12:00"
  *               hora_fin_descanso:
  *                 type: string
  *                 example: "13:00"
- *               es_festivo_Fin:
+ *               horas_trabajadas:
+ *                 type: string
+ *                 example: "08:00"
+ *               horas_descanso:
+ *                 type: string
+ *                 example: "01:00"
+ *               es_festivo_Inicio:
  *                 type: boolean
  *                 example: false
- *               es_festivo_Inicio:
+ *               es_festivo_Fin:
  *                 type: boolean
  *                 example: false
  *     responses:
@@ -235,7 +245,6 @@ router.get('/fechas', listarExtrasPorFechas);
  */
 
 router.get('/exportar', exportarExtrasExcel);
-
 
 
 module.exports = router;

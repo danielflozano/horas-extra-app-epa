@@ -7,8 +7,7 @@ const ExcelJS = require('exceljs');
 const crearExtras = async (req, res) => {
   try {
     const data = req.body;
-
-    // Campos obligatorios
+    
     const camposObligatorios = [
       'FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo',
       'fecha_fin_trabajo', 'hora_fin_trabajo'
@@ -19,34 +18,35 @@ const crearExtras = async (req, res) => {
 
     // Validar formato hora
     const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso']
+    ['hora_inicio_trabajo', 'hora_fin_trabajo', 
+     'hora_inicio_descanso', 'hora_fin_descanso']
       .forEach(c => { if (data[c] && !horaRegex.test(data[c])) throw new Error(`Formato inválido en ${c}`) });
 
-    // Validar fechas
     ['fecha_inicio_trabajo', 'fecha_fin_trabajo', 'fecha_inicio_descanso', 'fecha_fin_descanso']
       .forEach(f => { if (data[f] && !moment(data[f], 'YYYY-MM-DD', true).isValid()) throw new Error(`Fecha inválida: ${f}`) });
 
-    // Ajuste fechas de trabajo
     let inicioTrabajo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
     let finTrabajo = moment(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}`);
     if (finTrabajo.isBefore(inicioTrabajo)) finTrabajo.add(1, 'day');
 
     // Validar descanso
-    if (data.hora_inicio_descanso && data.hora_fin_descanso && data.fecha_inicio_descanso && data.fecha_fin_descanso) {
+    if (data.hora_inicio_descanso && data.hora_fin_descanso 
+      && data.fecha_inicio_descanso && data.fecha_fin_descanso) {
+      
       let inicioDesc = moment(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}`);
       let finDesc = moment(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}`);
-      if (finDesc.isBefore(inicioDesc)) finDesc.add(1, 'day');
-      if (inicioDesc.isBefore(inicioTrabajo) || finDesc.isAfter(finTrabajo))
-        return res.status(400).json({ success: false, message: 'Descanso fuera del rango de trabajo' });
-      if (finDesc.diff(inicioDesc, 'minutes') > 480)
-        return res.status(400).json({ success: false, message: 'Descanso > 8h' });
+
+    if (finDesc.isBefore(inicioDesc)) finDesc.add(1, 'day');
+    if (inicioDesc.isBefore(inicioTrabajo) || finDesc.isAfter(finTrabajo))
+      return res.status(400).json({ success: false, message: 'Descanso fuera del rango de trabajo' });
+    if (finDesc.diff(inicioDesc, 'minutes') > 480)
+      return res.status(400).json({ success: false, message: 'Descanso > 8h' });
     }
 
-    // helper: acepta fecha (Date o "YYYY-MM-DD") y hora ("HH:mm")
     function parseDateTime(fecha, hora) {
-      const fechaObj = fecha instanceof Date ? fecha : new Date(fecha); // fecha puede ser Date o string
+      const fechaObj = fecha instanceof Date ? fecha : new Date(fecha); 
       const year = fechaObj.getFullYear();
-      const month = fechaObj.getMonth(); // 0-based
+      const month = fechaObj.getMonth(); 
       const day = fechaObj.getDate();
       let hour = 0, minute = 0;
       if (hora && typeof hora === 'string') {
@@ -68,7 +68,7 @@ const crearExtras = async (req, res) => {
 
     // Buscar candidatos por ventana de fechas (filtro amplio para no traer TODA la colección)
     const filtro = {
-      FuncionarioAsignado: data.FuncionarioAsignado,
+      FuncionarioAsignado: data.FuncionarioAsignado.nombre_completo,
       fecha_inicio_trabajo: { $lte: data.fecha_fin_trabajo },
       fecha_fin_trabajo: { $gte: data.fecha_inicio_trabajo }
     };
@@ -102,6 +102,8 @@ const crearExtras = async (req, res) => {
     // Guardar registro
     const nuevaExtra = new Extras({ ...data, ...calculos });
     await nuevaExtra.save();
+
+    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo");
 
     res.status(201).json({ success: true, message: 'Registro creado', data: nuevaExtra });
 

@@ -14,7 +14,13 @@ const UsuarioSchema = Schema({
   password: {
     type: String,
     require: true
-  }
+  },
+  rol:{
+    type: String, enum: ['Administrador', 'SuperAdministrador','Usuario'],default: 'Usuario', required: true
+  },
+  resetCode: { type: String },
+  resetCodeExpires: { type: Date }
+
 });
 
 module.exports = model( 'Usuario', UsuarioSchema );
