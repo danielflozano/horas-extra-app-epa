@@ -34,14 +34,15 @@ const crearUsuario = async (req, res = response) => {
     await usuario.save();
 
     // Generar JWT
-    const token = await generarJWT(usuario.id, usuario.name);
-    const RefresToken = await generarJWT(usuario.id,usuario.name)
+    const token = await generarJWT(usuario.id, usuario.name,usuario.rol);
+    const RefresToken = await generarJWT(usuario.id,usuario.name, usuario.rol)
     res.status(201).json({
       ok: true,
       uid: usuario.id,
       name: usuario.name,
       rol: usuario.rol,
-      token
+      token,
+      RefresToken
     });
 
   } catch (error) {
@@ -81,8 +82,8 @@ const loginUsuario = async (req, res = response) => {
     }
 
     // Generar JWT
-    const token = await generarJWT(usuario.id,usuario.name,process.env.SECRET_JWT_SEED,'15m');
-    const Refreshtoken = await generarJWT(usuario.id, usuario.name, process.env.REFRESH_JWT_SEED,'7d');
+    const token = await generarJWT(usuario.id,usuario.name,usuario.rol,'15m');
+    const Refreshtoken = await generarJWT(usuario.id, usuario.name, usuario.rol,'7d');
 
     res.status(200).json({
       ok: true,
@@ -105,17 +106,18 @@ const loginUsuario = async (req, res = response) => {
 
 const revalidarToken = async (req, res = response) => {
 
-  const { uid, name } = req
+  const { uid, name , rol } = req
 
   try {
 
     // Generar nuevo JWT y retornarlo en esta petición
-    const token = await generarJWT(uid, name);
+    const token = await generarJWT(uid, name, rol);
 
     res.json({
       ok: true,
       uid: uid,
       name: name,
+      rol: rol,
       token: token
     });
 

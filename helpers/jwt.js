@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
 
 
-const generarJWT = (uid, name, expiresIn = '2h') => {
+const generarJWT = (uid, name,rol, expiresIn = '2h') => {
   return new Promise((resolve, reject) => {
-    const payload = { uid, name };
+    const payload = { uid, name, rol};
 
     jwt.sign(payload, process.env.SECRET_JWT_SEED, { expiresIn }, (err, token) => {
       if (err) {
@@ -24,12 +24,13 @@ const refreshToken = async (req, res) => {
 
   try {
     // Verificar refresh token
-    const { uid, name } = jwt.verify(refreshToken, process.env.REFRESH_JWT_SEED);
+    const { uid, name, rol } = jwt.verify(refreshToken, process.env.REFRESH_JWT_SEED);
 
     // Generar nuevo access token
     const newAccessToken = await generarJWT(
       uid,
       name,
+      rol,
       process.env.SECRET_JWT_SEED,
       '15m'
     );

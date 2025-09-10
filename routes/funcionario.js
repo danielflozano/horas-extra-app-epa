@@ -238,7 +238,7 @@ router.get('/', listarFuncionarios);
  *       404:
  *         description: Funcionario no encontrado
  */
-router.put('/actualizar/:id', actualizarFuncionario);
+router.put('/actualizar/:id' ,actualizarFuncionario);
 
 /**
  * @swagger

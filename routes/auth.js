@@ -9,6 +9,7 @@ const { validarCampos } = require('../middlewares/validar-campos')
 const { crearUsuario, loginUsuario, revalidarToken,resetPassword, solicitarReset,verificarCodigo,ActualizarDatos} = require('../controllers/auth');
 const { validarJWT } = require('../middlewares/validar-jwt');
 const {refreshToken}= require('../helpers/jwt')
+const {SuperAdmin}=require('../middlewares/validar-rol')
 
 const router = Router();
 
@@ -20,12 +21,13 @@ router.post (
     check( 'email', 'El correo es obligatorio' ).isEmail(),
     check( 'password', 'El password debe de ser de 6 caracteres' ).isLength({ min: 6 }),
     validarCampos
-  ],
+  ],[validarJWT, SuperAdmin],
   crearUsuario
+  
 );
 
 router.post (
-  '/',
+  '/login',
   [ // middlewares
     check( 'email', 'El correo es obligatorio' ).isEmail(),
     check( 'password', 'El password debe de ser de 6 caracteres' ).isLength({ min: 6 }),
