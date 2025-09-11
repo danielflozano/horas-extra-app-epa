@@ -105,7 +105,7 @@ let esOrdinario = false;
   }
 
   // Recargo nocturno: SOLO cuenta en ordinarias nocturnas
-  if (esNocturno && esOrdinario) {
+  if (esNocturno && esOrdinario && diaSemana != 7 && !esFestivo ) {
     RNO++;
   }
 

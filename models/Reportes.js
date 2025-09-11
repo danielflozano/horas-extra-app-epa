@@ -18,13 +18,11 @@ const ReporteSchema = Schema({
     type: Date,
     required: true
   },
-
- tipoOperario:{
- type: String,
+  tipoOperario: {
+    type: String,
     enum: ['Planta', 'Temporal'],
     required: true
-},
-
+  },
   // Extras HH:mm
   HEDO_HORA: { type: String, required: true },
   HENO_HORA: { type: String, required: true },
@@ -45,9 +43,11 @@ const ReporteSchema = Schema({
   RNO_DEC: { type: Number, required: true },
   // Sumatorias finales en decimal
   totalExtras_DEC: { type: Number, required: true },
-  totalSuplementarias_DEC: { type: Number, required: true },
-  totalHoras_DEC: { type: Number, required: true },
-  periodo: { type: String, required: true }
+  periodo: {
+    type: String,
+    enum: ['Quincenal', 'Mensual', 'Anual'], 
+    required: true
+  }
 });
 
 module.exports = model('Reportes', ReporteSchema);
