@@ -99,13 +99,26 @@ const actualizarFuncionario = async (req, res) => {
 // Listar todos los funcionarios
 const listarFuncionarios = async (req, res) => {
     try {
-        const funcionarios = await Funcionario.find().populate('Cargo', 'name'); // populate con "name"
+        const funcionarios = await Funcionario.find().populate('Cargo', 'name'); 
         res.status(200).json({ success: true, data: funcionarios });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Error al listar los funcionarios' });
     }
 };
+
+const listarFuncionariosActivos = async (req, res) => {
+    try {
+        const funcionarios = await Funcionario.find({ estado: "Activo" })
+           .populate("Cargo", "name");
+
+        res.status(200).json({ success: true, data: funcionarios });
+    } catch (error) {
+        console.error("Error al listar funcionarios activos:", error);
+        res.status(500).json({ success: false, message: "Error al listar los funcionarios activos" });
+    }
+};
+
 
 const obtenerFuncionarioPorId = async (req, res) => {
     try {
@@ -120,4 +133,4 @@ const obtenerFuncionarioPorId = async (req, res) => {
 };
 
 
-module.exports = { crearFuncionario, listarFuncionarios, actualizarFuncionario, obtenerFuncionarioPorId};
+module.exports = { crearFuncionario, listarFuncionarios, actualizarFuncionario, obtenerFuncionarioPorId, listarFuncionariosActivos};

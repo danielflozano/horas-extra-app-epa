@@ -11,7 +11,7 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
 
 /**
  * @swagger
- * /api/reportes/crear:
+ * /api/reporte/crear:
  *   post:
  *     summary: Crear un nuevo reporte con datos detallados de horas
  *     tags: [Reportes]
@@ -123,7 +123,7 @@ router.post('/crear', crearReporte);
 
 /**
  * @swagger
- * /api/reportes/exportar:
+ * /api/reporte/exportar:
  *   post:
  *     summary: Exportar reportes filtrados a Excel
  *     description: Filtra los reportes por un rango de fechas (`fechaInicio` y `fechaFin`) y los exporta en un archivo Excel.
@@ -155,7 +155,7 @@ router.post('/exportar', exportarReporteExcel);
 
 /**
  * @swagger
- * /api/reportes/listar:
+ * /api/reporte/listar:
  *   get:
  *     summary: Listar todos los reportes registrados
  *     tags: [Reportes]

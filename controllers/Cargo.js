@@ -12,8 +12,6 @@ const crearCargo = async (req, res) => {
         message: "Ya existe el cargo"
       });
     }
-
-
     if (!name) return res.status(400).json({ success: false, message: 'El nombre del cargo es obligatorio.' });
 
     const nuevoCargo = new Cargo({ name });
@@ -35,4 +33,16 @@ const listarCargos = async (req, res) => {
   }
 };
 
-module.exports = { crearCargo, listarCargos };
+// Eliminar registro
+const eliminarCargo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cargo = await Cargo.findByIdAndDelete(id);
+    if (!cargo) return res.status(404).json({ success: false, message: 'No encontrado' });
+    res.status(200).json({ success: true, message: 'Registro eliminado', data: cargo });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { crearCargo, listarCargos, eliminarCargo };

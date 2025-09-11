@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { crearCargo, listarCargos } = require('../controllers/Cargo');
+const { crearCargo, listarCargos ,eliminarCargo} = require('../controllers/Cargo');
 
 /**
  * @swagger
@@ -22,12 +22,11 @@ const { crearCargo, listarCargos } = require('../controllers/Cargo');
  *           schema:
  *             type: object
  *             required:
- *               - nombre
+ *               - name
  *             properties:
  *               name:
  *                 type: string
  *                 description: Nombre del cargo
- *                 example: "Gerente de Proyectos"
  *     
  *     responses:
  *       201:
@@ -62,5 +61,8 @@ router.post('/crearCargo', crearCargo);
  *             
  */
 router.get('/listar', listarCargos);
+
+
+router.delete('/delete/:id', eliminarCargo)
 
 module.exports = router;

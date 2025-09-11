@@ -6,8 +6,10 @@
 const { Router } = require('express');
 const { check } = require('express-validator');
 const { validarCampos } = require('../middlewares/validar-campos')
-const { crearUsuario, loginUsuario, revalidarToken } = require('../controllers/auth');
+const { crearUsuario, loginUsuario, revalidarToken,resetPassword, solicitarReset,verificarCodigo,ActualizarDatos} = require('../controllers/auth');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const {refreshToken}= require('../helpers/jwt')
+const {SuperAdmin}=require('../middlewares/validar-rol')
 
 const router = Router();
 
@@ -23,8 +25,9 @@ router.post (
       .matches(/[a-z]/).withMessage('La contraseña debe tener al menos una letra minúscula')
       .matches(/[0-9]/).withMessage('La contraseña debe tener al menos un número'),
     validarCampos
-  ],
+  ],[validarJWT, SuperAdmin],
   crearUsuario
+  
 );
 
 router.post (
@@ -44,5 +47,15 @@ router.get (
   ],
   revalidarToken
 );
+
+router.post('/reset', resetPassword);
+
+router.post('/solicitud',solicitarReset);
+
+router.post('/verificar', verificarCodigo);
+
+router.post('/refresh', refreshToken)
+
+router.put('/update', ActualizarDatos)
 
 module.exports = router;

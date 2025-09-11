@@ -20,7 +20,7 @@ function minutosAHHMM(minutos) {
 // Crear reporte JSON y guardar en DB
 async function crearReporte(req, res) {
   try {
-    const { fechaInicio, fechaFin, tipoOperario } = req.body; // 👈 ahora recibimos tipoOperario también
+    const { fechaInicio, fechaFin, tipoOperario } = req.body; 
     if (!fechaInicio || !fechaFin)
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
 
@@ -34,7 +34,7 @@ async function crearReporte(req, res) {
     })
       .populate({
         path: "FuncionarioAsignado",
-        match: tipoOperario ? { tipoOperario } : {} // 👈 si envían tipoOperario lo filtra
+        match: tipoOperario ? { tipoOperario } : {}
       });
 
     // Filtrar los que no tengan funcionario asignado (por el match anterior puede quedar null)
