@@ -15,11 +15,15 @@ const router = Router();
 
 
 router.post (
-  '/new',
+  '/register',
   [ // middlewares
-    check( 'name', 'El nombre es obligatorio' ).not().isEmpty(),
+    check( 'name', 'El nombre es obligatorio' ).not().isEmpty()
+      .matches(/^[a-zA-Z\s]+$/).withMessage('El nombre solo puede contener letras y espacios'),
     check( 'email', 'El correo es obligatorio' ).isEmail(),
-    check( 'password', 'El password debe de ser de 6 caracteres' ).isLength({ min: 6 }),
+    check( 'password', 'La contraseña debe tener al menos 8 caracteres' ).isLength({ min: 8 })
+      .matches(/[A-Z]/).withMessage('La contraseña debe tener al menos una letra mayúscula')
+      .matches(/[a-z]/).withMessage('La contraseña debe tener al menos una letra minúscula')
+      .matches(/[0-9]/).withMessage('La contraseña debe tener al menos un número'),
     validarCampos
   ],[validarJWT, SuperAdmin],
   crearUsuario
@@ -30,7 +34,7 @@ router.post (
   '/login',
   [ // middlewares
     check( 'email', 'El correo es obligatorio' ).isEmail(),
-    check( 'password', 'El password debe de ser de 6 caracteres' ).isLength({ min: 6 }),
+    check( 'password', 'El password es obligatorio' ).isLength({ min: 6 }),
     validarCampos
   ],
   loginUsuario

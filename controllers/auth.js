@@ -28,6 +28,7 @@ const crearUsuario = async (req, res = response) => {
 
     // Encriptar contraseña
     const salt = await bcrypt.genSalt();
+
     usuario.password = await bcrypt.hash(password, salt);
 
     // Guardar en BD
@@ -118,6 +119,7 @@ const revalidarToken = async (req, res = response) => {
       uid: uid,
       name: name,
       rol: rol,
+
       token: token
     });
 
