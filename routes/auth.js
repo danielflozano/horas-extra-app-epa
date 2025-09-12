@@ -16,6 +16,7 @@ const {
 
 const router = Router();
 
+
 /**
  * @swagger
  * /api/auth/new:
@@ -111,6 +112,7 @@ router.post(
  */
 router.post(
   '/login',
+
   [
     check('email', 'El correo es obligatorio').isEmail(),
     check('password', 'El password debe de ser de 6 caracteres').isLength({ min: 6 }),

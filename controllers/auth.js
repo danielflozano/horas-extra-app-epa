@@ -16,6 +16,7 @@ const crearUsuario = async (req, res = response) => {
     }
     usuario = new Usuario({ name, email, password, rol: rol || 'Usuario' });
     const salt = await bcrypt.genSalt();
+
     usuario.password = await bcrypt.hash(password, salt);
     await usuario.save();
     
@@ -84,6 +85,7 @@ const loginUsuario = async (req, res = response) => {
       token,
       refreshtoken
     });
+
   } catch (error) {
     console.log(error);
     res.status(500).json({ ok: false, msg: 'Por favor hable con el administrador' });
