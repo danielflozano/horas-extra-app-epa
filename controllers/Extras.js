@@ -163,6 +163,9 @@ const updateExtra = async (req, res) => {
   }
 };
 
+// ===================================================================================
+// CONTROLADOR PARA EXPORTAR EXCEL (DISEÑO FINAL Y PROPORCIONAL)
+// ===================================================================================
 const exportarExtrasExcel = async (req, res) => {
   try {
     const { identificacion, fechaInicio, fechaFin } = req.query;
@@ -194,97 +197,116 @@ const exportarExtrasExcel = async (req, res) => {
         pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 
-    // --- 1. AÑADIR LOGO ---
-    const logoPath = path.join(__dirname, '../public/Epa.png');
-    if (fs.existsSync(logoPath)) {
-        const logoId = workbook.addImage({
-            buffer: fs.readFileSync(logoPath),
-            extension: 'png',
-        });
+    // --- 1. DISEÑO DE ENCABEZADO FINAL ---
 
-        // Se coloca la imagen UNA SOLA VEZ con la variable correcta 'logoId'
+    // Fila 1: Logo y Fecha de Generación
+    worksheet.getRow(1).height = 45; // Aumentar altura para que el logo quepa bien
+    const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
+    if (fs.existsSync(logoPath)) {
+        const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
+        
+        // --- CAMBIO: Se inserta con tamaño fijo para evitar distorsión ---
         worksheet.addImage(logoId, {
-            tl: { col: 0.2, row: 0.2 },
-            ext: { width: 140, height: 60 } // Ajusta el tamaño como prefieras
+            tl: { col: 0.5, row: 0.2 }, // Posición
+            ext: { width: 250, height: 100 }  // Tamaño en píxeles (ajusta si es necesario)
         });
     }
     
-    // Ajustar altura de filas para el logo y títulos
-    worksheet.getRow(1).height = 25;
-    worksheet.getRow(2).height = 25;
+    worksheet.mergeCells('P1:S1');
+    const generatedCell = worksheet.getCell('P1');
+    generatedCell.value = `Generado:\n${moment().format('DD/MM/YYYY HH:mm')}`;
     
-    // --- 2. TÍTULO Y SUBTÍTULO ---
-    worksheet.mergeCells('D1:O2');
-    const titleCell = worksheet.getCell('D1');
+    // --- CAMBIO: Fecha más grande y en negrita ---
+    generatedCell.font = { name: 'Calibri', size: 10, bold: true, italic: true };
+    generatedCell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
+
+    // Fila 2: Título Principal
+    worksheet.getRow(2).height = 25;
+    worksheet.mergeCells('A2:S2');
+    const titleCell = worksheet.getCell('A2');
     titleCell.value = 'REGISTRO DE HORAS EXTRAS Y SUPLEMENTARIAS';
     titleCell.font = { name: 'Calibri', size: 16, bold: true };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
+    // Fila 3: Subtítulo
     let subtitulo = 'Reporte General';
     if(funcionarioFiltrado) subtitulo = `Reporte para: ${funcionarioFiltrado.nombre_completo}`;
-    if(fechaInicio && fechaFin) subtitulo += ` (del ${fechaInicio} al ${fechaFin})`;
-
-    worksheet.mergeCells('D3:O3');
-    const subtitleCell = worksheet.getCell('D3');
+    if(fechaInicio && fechaFin) subtitulo += ` (Período: ${fechaInicio} al ${fechaFin})`;
+    worksheet.mergeCells('A3:S3');
+    const subtitleCell = worksheet.getCell('A3');
     subtitleCell.value = subtitulo;
     subtitleCell.font = { name: 'Calibri', size: 10, italic: true };
     subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     
-    worksheet.getRow(4).height = 20;
+    // Fila 4: Fila vacía para espaciado
+    worksheet.getRow(4).height = 15;
 
-    // --- 3. CABECERAS DE LA TABLA ---
+    // --- 2. CABECERAS DE LA TABLA (en la fila 5) ---
     const headers = [
       'Cédula', 'Nombre Funcionario', 'Cargo',
       'Fecha Inicio', 'Hora Inicio', 'Fecha Fin', 'Hora Fin',
+      'Fecha Inicio Descanso', 'Hora Inicio Descanso', 'Fecha Fin Descanso', 'Hora Fin Descanso',
       'HEDO', 'HENO', 'HEDF', 'HENF', 'HDF', 'HNF', 'RNO', 'Total Extras'
     ];
     const headerRow = worksheet.getRow(5);
     headerRow.values = headers;
+    headerRow.height = 25;
+    const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
+
     headerRow.eachCell(cell => {
       cell.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }};
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
     });
 
-    // --- 4. DATOS ---
+    // --- 3. DATOS (empiezan en la fila 6) ---
     if (extras.length === 0) {
-      worksheet.addRow(['No se encontraron registros para los filtros seleccionados.']);
+      const noDataRow = worksheet.addRow(['No se encontraron registros para los filtros seleccionados.']);
+      worksheet.mergeCells(`A${noDataRow.number}:S${noDataRow.number}`);
+      const noDataCell = noDataRow.getCell(1);
+      noDataCell.alignment = { horizontal: 'center' };
+      noDataCell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
     } else {
-      extras.forEach(e => {
+      extras.forEach((e, index) => {
         if (!e.FuncionarioAsignado) return;
         
-        worksheet.addRow([
-          e.FuncionarioAsignado.identificacion || '',
-          e.FuncionarioAsignado.nombre_completo || '',
+        const dataRow = worksheet.addRow([
+          e.FuncionarioAsignado.identificacion || '', e.FuncionarioAsignado.nombre_completo || '',
           e.FuncionarioAsignado.Cargo?.name || 'N/A',
-          moment(e.fecha_inicio_trabajo).format('DD/MM/YYYY'),
-          e.hora_inicio_trabajo || '',
-          moment(e.fecha_fin_trabajo).format('DD/MM/YYYY'),
-          e.hora_fin_trabajo || '',
-          e.HEDO || '00:00',
-          e.HENO || '00:00',
-          e.HEDF || '00:00',
-          e.HENF || '00:00',
-          e.HDF || '00:00',
-          e.HNF || '00:00',
-          e.RNO || '00:00',
-          e.horas_extras || '00:00'
+          moment(e.fecha_inicio_trabajo).format('DD/MM/YYYY'), e.hora_inicio_trabajo || '',
+          moment(e.fecha_fin_trabajo).format('DD/MM/YYYY'), e.hora_fin_trabajo || '',
+          e.fecha_inicio_descanso ? moment(e.fecha_inicio_descanso).format('DD/MM/YYYY') : '', e.hora_inicio_descanso || '',
+          e.fecha_fin_descanso ? moment(e.fecha_fin_descanso).format('DD/MM/YYYY') : '', e.hora_fin_descanso || '',
+          e.HEDO || '00:00', e.HENO || '00:00', e.HEDF || '00:00', e.HENF || '00:00',
+          e.HDF || '00:00', e.HNF || '00:00', e.RNO || '00:00', e.horas_extras || '00:00'
         ]);
+
+        dataRow.eachCell((cell, colNumber) => {
+            cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
+            if (colNumber <= 3) {
+                cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+            } else {
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            }
+            if (index % 2 !== 0) {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+            }
+        });
       });
     }
-
-    // --- 5. ESTILOS FINALES ---
-    worksheet.columns.forEach(column => {
-        column.width = 15;
-        column.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    });
-    worksheet.getColumn('B').width = 35;
-    worksheet.getColumn('C').width = 25;
-
+    
+    // --- 4. ANCHOS DE COLUMNA Y VISTA ---
+    worksheet.columns = [
+        { width: 18 }, { width: 35 }, { width: 25 }, 
+        { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, 
+        { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
+        { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, 
+        { width: 15 } 
+    ];
     worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
-    // --- 6. ENVÍO DEL ARCHIVO ---
+    // --- 5. ENVÍO DEL ARCHIVO ---
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=Reporte_Horas_Extras.xlsx');
     await workbook.xlsx.write(res);

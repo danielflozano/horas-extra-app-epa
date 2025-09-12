@@ -4,6 +4,8 @@ const Funcionario = require('../models/Funcionarios'); // Se necesita para el fi
 const ExcelJS = require("exceljs");
 const moment = require('moment');
 require('moment/locale/es');
+const fs = require('fs');
+const path = require('path');
 
 // --- Funciones de utilidad (sin cambios) ---
 function convertirHorasAMinutos(hora) {
@@ -119,7 +121,7 @@ async function crearReporte(req, res) {
 }
 
 // ===================================================================================
-// CONTROLADOR PARA EXPORTAR A EXCEL (VERSIÓN INDEPENDIENTE Y ROBUSTA)
+// CONTROLADOR PARA EXPORTAR REPORTE RESUMIDO (CON DISEÑO DE HEADER COMPLETO)
 // ===================================================================================
 async function exportarReporteExcel(req, res) {
   try {
@@ -131,20 +133,15 @@ async function exportarReporteExcel(req, res) {
     const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
     const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
     
-    // --- LÓGICA DE CÁLCULO DIRECTA (YA NO DEPENDE DE 'crearReporte') ---
-    
-    // 1. OBTENER LA LISTA COMPLETA DE FUNCIONARIOS PRIMERO
+    // --- LÓGICA DE CÁLCULO (SIN CAMBIOS) ---
     const filtroFuncionarios = {};
-    if (tipoOperario) {
-      filtroFuncionarios.tipoOperario = tipoOperario;
-    }
+    if (tipoOperario) filtroFuncionarios.tipoOperario = tipoOperario;
     const todosLosFuncionarios = await Funcionario.find(filtroFuncionarios);
 
     if (todosLosFuncionarios.length === 0) {
-      return res.status(404).json({ mensaje: "No se encontraron funcionarios para los criterios seleccionados." });
+      return res.status(404).json({ mensaje: "No se encontraron funcionarios." });
     }
 
-    // 2. CREAR UN MAPA INICIAL CON TODOS LOS FUNCIONARIOS Y SUS HORAS EN CERO
     const reportesMap = new Map();
     todosLosFuncionarios.forEach(f => {
       reportesMap.set(f._id.toString(), {
@@ -154,11 +151,9 @@ async function exportarReporteExcel(req, res) {
       });
     });
 
-    // 3. BUSCAR LAS HORAS EXTRAS Y SUMARLAS AL MAPA
     const idsDeFuncionarios = todosLosFuncionarios.map(f => f._id);
     const filtroHorasExtras = {
-      fecha_inicio_trabajo: { $lte: fin },
-      fecha_fin_trabajo: { $gte: inicio },
+      fecha_inicio_trabajo: { $lte: fin }, fecha_fin_trabajo: { $gte: inicio },
       FuncionarioAsignado: { $in: idsDeFuncionarios }
     };
     const extrasEncontradas = await HorasExtras.find(filtroHorasExtras);
@@ -169,7 +164,6 @@ async function exportarReporteExcel(req, res) {
       if (funcionarioEnMapa) {
         funcionarioEnMapa.HEDO += convertirHorasAMinutos(e.HEDO);
         funcionarioEnMapa.HENO += convertirHorasAMinutos(e.HENO);
-        // ... (y así para todas las demás horas)
         funcionarioEnMapa.HEDF += convertirHorasAMinutos(e.HEDF);
         funcionarioEnMapa.HENF += convertirHorasAMinutos(e.HENF);
         funcionarioEnMapa.HDF += convertirHorasAMinutos(e.HDF);
@@ -178,7 +172,6 @@ async function exportarReporteExcel(req, res) {
       }
     });
 
-    // 4. FILTRAR LOS FUNCIONARIOS QUE TIENEN TODO EN CERO
     const reportesFinales = [];
     for (const r of reportesMap.values()) {
         const totalMinutos = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
@@ -197,49 +190,79 @@ async function exportarReporteExcel(req, res) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Reporte Horas Extras");
 
-    const mes = moment(inicio).locale('es').format('MMMM').toUpperCase();
-    const anio = moment(inicio).format('YYYY');
-    const titulo = `REPORTE DE TIEMPO EXTRA Y SUPLEMENTARIO - ${mes} ${anio}`;
-    const subtitulo = `Período consultado: del ${moment(inicio).format("DD/MM/YYYY")} al ${moment(fin).format("DD/MM/YYYY")}`;
+    // 1. Encabezado del Reporte (Logo, Títulos, Fecha)
+    worksheet.getRow(1).height = 45;
+    const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
+    if (fs.existsSync(logoPath)) {
+        const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
+        worksheet.addImage(logoId, { tl: { col: 0.5, row: 0.2 }, ext: { width: 140, height: 60 } });
+    }
+    
+    worksheet.mergeCells('D1:N1');
+    const titleCell = worksheet.getCell('D1');
+    titleCell.value = 'Reporte Horas Extras';
+    titleCell.font = { name: 'Calibri', size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    const titleRow = worksheet.addRow([titulo]);
-    worksheet.mergeCells('A1:Q1');
-    titleRow.getCell(1).font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleRow.getCell(1).alignment = { horizontal: 'center' };
-    titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
-    const subtitleRow = worksheet.addRow([subtitulo]);
-    worksheet.mergeCells('A2:Q2');
-    subtitleRow.getCell(1).font = { name: 'Calibri', size: 10, italic: true };
-    subtitleRow.getCell(1).alignment = { horizontal: 'center' };
-    worksheet.addRow([]);
-    worksheet.getCell('A4').value = "Cedula de Ciudadania No.";
+    worksheet.mergeCells('O1:Q1');
+    const generatedCell = worksheet.getCell('O1');
+    generatedCell.value = `Generado:\n${moment().format('DD/MM/YYYY HH:mm')}`;
+    generatedCell.font = { name: 'Calibri', size: 10, bold: true, italic: true };
+    generatedCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+    worksheet.getRow(2).height = 25;
+    const subtitulo = `Período consultado: del ${fechaInicio} al ${fechaFin}`;
+    worksheet.mergeCells('A2:S2');
+    const subtitleCell = worksheet.getCell('A2');
+    subtitleCell.value = subtitulo;
+    subtitleCell.font = { name: 'Calibri', size: 10, italic: true };
+    subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.getRow(3).height = 15;
+
+    // --- 2. CABECERAS DE MÚLTIPLES NIVELES (RESTAURADO) ---
+    const headerRow4 = worksheet.getRow(4);
+    headerRow4.height = 20;
+    const headerRow5 = worksheet.getRow(5);
+    headerRow5.height = 20;
+
+    // Asignar valores a las celdas principales de la fila 4
+    worksheet.getCell('A4').value = "Cédula";
     worksheet.getCell('B4').value = "Nombre del funcionario";
     worksheet.getCell('C4').value = "Tiempo Extra (HH:MM)";
     worksheet.getCell('G4').value = "Tiempo Suplementario (HH:MM)";
     worksheet.getCell('J4').value = "Conversion Decimal";
-    worksheet.getCell('Q4').value = "TOTAL EXTRAS";
-    const subheaders = ["HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO", "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO"];
-    worksheet.getRow(5).values = ["", "", ...subheaders];
+    worksheet.getCell('Q4').value = "Total Extras (DEC)";
+    
+    // Asignar valores a la fila 5 (sub-cabeceras)
+    headerRow5.values = [
+        "", "", // A5, B5 vacías para el merge
+        "HEDO", "HENO", "HEDF", "HENF", // C5 a F5
+        "HDF", "HNF", "RNO",           // G5 a I5
+        "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO", // J5 a P5
+        "" // Q5 vacía para el merge
+    ];
+
+    // Realizar fusiones de celdas
     worksheet.mergeCells('A4:A5'); worksheet.mergeCells('B4:B5');
     worksheet.mergeCells('C4:F4'); worksheet.mergeCells('G4:I4');
-    worksheet.mergeCells('J4:P4');
-    worksheet.mergeCells('Q4:Q5');
+    worksheet.mergeCells('J4:P4'); worksheet.mergeCells('Q4:Q5');
 
-    const thickRightBorder = { style: 'medium' };
-    for (let i = 4; i <= 5; i++) {
-        const row = worksheet.getRow(i);
-        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            cell.font = { name: 'Calibri', bold: true, size: 10 };
+    // Aplicar estilos a todas las celdas de las dos filas de cabecera
+    const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
+    [headerRow4, headerRow5].forEach(row => {
+        row.eachCell({ includeEmpty: true }, cell => {
+            cell.font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E2F3' } };
-            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }};
-            if ([2, 6, 9, 16].includes(colNumber)) { cell.border.right = thickRightBorder; }
+            cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
         });
-    }
+    });
 
-    reportesFinales.forEach(r => {
+    // 3. Datos de la Tabla (empiezan en la fila 6)
+    reportesFinales.forEach((r, index) => {
       const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
-      worksheet.addRow([
+      const dataRow = worksheet.addRow([
         r.identificacion_Funcionario, r.nombre_Funcionario,
         minutosAHHMM(r.HEDO), minutosAHHMM(r.HENO), minutosAHHMM(r.HEDF), minutosAHHMM(r.HENF),
         minutosAHHMM(r.HDF), minutosAHHMM(r.HNF), minutosAHHMM(r.RNO),
@@ -248,22 +271,35 @@ async function exportarReporteExcel(req, res) {
         parseFloat((r.HDF / 60).toFixed(2)), parseFloat((r.HNF / 60).toFixed(2)),
         parseFloat((r.RNO / 60).toFixed(2)),
         parseFloat((totalExtrasMin / 60).toFixed(2)),
-      ]).eachCell((cell, colNumber) => {
-        cell.font = { name: 'Calibri', size: 10 };
-        cell.alignment = { horizontal: 'center' };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }};
-        if ([2, 6, 9, 16].includes(colNumber)) { cell.border.right = thickRightBorder; }
+      ]);
+
+      dataRow.eachCell((cell, colNumber) => {
+        cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
+        if (colNumber <= 2) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+        } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        }
+        if (index % 2 !== 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        }
       });
     });
 
+    // 4. Anchos de Columna y Vista Congelada
     worksheet.columns = [
-      { width: 18 }, { width: 40 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 },
-      { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 },
-      { width: 9 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 18 }
+      { width: 18 }, { width: 40 }, 
+      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, 
+      { width: 12 }, { width: 12 }, { width: 12 }, 
+      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, 
+      { width: 12 }, { width: 12 }, { width: 12 }, 
+      { width: 18 }
     ];
+    worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
+    // 5. Envío del Archivo
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Reporte_Horas_Extras_${moment().format('YYYYMMDD_HHmmss')}.xlsx`);
+    res.setHeader("Content-Disposition", `attachment; filename=Reporte_Consolidado_Horas_${moment().format('YYYYMMDD_HHmmss')}.xlsx`);
     await workbook.xlsx.write(res);
     res.end();
 
