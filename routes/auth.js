@@ -244,7 +244,7 @@ router.put('/update/:id', [validarJWT, SuperAdmin], ActualizarDatos);
  *       500:
  *         description: Error en el servidor
  */
-router.post('/solicitarReset', solicitarReset);
+router.post('/solicitarReset' , check('email', 'El correo es obligatorio').isEmail(),solicitarReset);
 
 /**
  * @swagger
@@ -338,7 +338,16 @@ router.post('/verificarCodigo', verificarCodigo);
  *       500:
  *         description: Error en el servidor.
  */
-router.post('/resetPassword', resetPassword);
+router.post(
+  '/resetPassword',
+  [
+    check('nuevaPassword', 'La contraseña debe tener mínimo 6 caracteres').isLength({ min: 6 }),
+    check('confirmarPassword', 'La confirmación debe tener mínimo 6 caracteres').isLength({ min: 6 }),
+    validarCampos
+  ],
+  resetPassword
+);
+
 
 
 
