@@ -308,13 +308,13 @@ router.post('/verificarCodigo', verificarCodigo);
  *           schema:
  *             type: object
  *             required:
- *               - email
+ *               - confirmarPassword
  *               - nuevaPassword
  *             properties:
- *               email:
+ *               confirmarPassword:
  *                 type: string
- *                 format: email
- *                 example: usuario@example.com
+ *                 format: password
+ *                 example: "NuevaClave123"
  *               nuevaPassword:
  *                 type: string
  *                 format: password
@@ -339,6 +339,7 @@ router.post('/verificarCodigo', verificarCodigo);
  *         description: Error en el servidor.
  */
 router.post('/resetPassword', resetPassword);
+
 
 
 module.exports = router;
