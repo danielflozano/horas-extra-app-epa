@@ -268,15 +268,23 @@ const verificarCodigo = async (req, res) => {
 
 
 const resetPassword = async (req, res) => {
-  const { email, nuevaPassword } = req.body;
+  const { nuevaPassword, confirmarPassword } = req.body;
 
   try {
-    const usuario = await Usuario.findOne({ email });
-
-    if (!usuario || !usuario.resetVerified) {
+    if (nuevaPassword !== confirmarPassword) {
       return res.status(400).json({
         ok: false,
-        msg: "Debe validar el código antes de cambiar la contraseña."
+        msg: "Las contraseñas no coinciden."
+      });
+    }
+
+    // Buscar usuario que tenga resetVerified = true
+    const usuario = await Usuario.findOne({ resetVerified: true });
+
+    if (!usuario) {
+      return res.status(400).json({
+        ok: false,
+        msg: "No hay un proceso de recuperación activo."
       });
     }
 
@@ -301,8 +309,6 @@ const resetPassword = async (req, res) => {
     res.status(500).json({ ok: false, msg: "Error en el servidor" });
   }
 };
-
-
 
 
 module.exports = {
