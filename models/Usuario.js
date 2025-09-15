@@ -19,8 +19,8 @@ const UsuarioSchema = Schema({
     type: String, enum: ['Administrador', 'SuperAdministrador','Usuario'],default: 'Usuario', required: true
   },
   resetCode: { type: String },
-  resetCodeExpires: { type: Date }
-
+  resetCodeExpires: { type: Date },
+  resetVerified: { type: Boolean, default: false }
 });
 
 module.exports = model( 'Usuario', UsuarioSchema );

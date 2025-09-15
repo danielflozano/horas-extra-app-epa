@@ -202,6 +202,143 @@ router.post('/renew', revalidarToken);
  *       401:
  *         description: No autorizado (token inválido).
  */
-router.put('/update', [validarJWT, SuperAdmin], ActualizarDatos);
+router.put('/update/:id', [validarJWT, SuperAdmin], ActualizarDatos);
+
+/**
+ * @swagger
+ * /api/auth/solicitarReset:
+ *   post:
+ *     summary: Solicita un código de recuperación de contraseña
+ *     description: Envía un código temporal al correo del usuario para permitir el reseteo de contraseña.
+ *     tags:
+ *       - Autenticación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: usuario@example.com
+ *     responses:
+ *       200:
+ *         description: Código de recuperación enviado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 msg:
+ *                   type: string
+ *                   example: "Código enviado al correo."
+ *       400:
+ *         description: El correo no está registrado o no se pudo enviar el código
+ *       500:
+ *         description: Error en el servidor
+ */
+router.post('/solicitarReset', solicitarReset);
+
+/**
+ * @swagger
+ * /api/auth/verificarCodigo:
+ *   post:
+ *     summary: Verificar código de recuperación
+ *     description: Valida el código de recuperación enviado al correo del usuario.
+ *     tags:
+ *       - Autenticación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - codigo
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: usuario@example.com
+ *               codigo:
+ *                 type: string
+ *                 example: "367226"
+ *     responses:
+ *       200:
+ *         description: Código válido, el usuario puede cambiar la contraseña.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 msg:
+ *                   type: string
+ *                   example: "Código válido, puede cambiar la contraseña."
+ *       400:
+ *         description: Código inválido o expirado.
+ *       500:
+ *         description: Error en el servidor.
+ */
+router.post('/verificarCodigo', verificarCodigo);
+
+
+/**
+ * @swagger
+ * /api/auth/resetPassword:
+ *   post:
+ *     summary: Restablecer contraseña
+ *     description: Permite al usuario establecer una nueva contraseña después de validar el código de recuperación.
+ *     tags:
+ *       - Autenticación
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - nuevaPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: usuario@example.com
+ *               nuevaPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NuevaClave123"
+ *     responses:
+ *       200:
+ *         description: Contraseña restablecida correctamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 msg:
+ *                   type: string
+ *                   example: "Contraseña restablecida correctamente."
+ *       400:
+ *         description: El código no fue validado previamente o los datos son incorrectos.
+ *       500:
+ *         description: Error en el servidor.
+ */
+router.post('/resetPassword', resetPassword);
+
 
 module.exports = router;
