@@ -22,28 +22,9 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
  *           schema:
  *             type: object
  *             required:
- *               - identificacion_Funcionario
- *               - nombre_Funcionario
- *               - fechaInicioReporte
- *               - fechaFinReporte
- *               - HEDO_HORA
- *               - HENO_HORA
- *               - HEDF_HORA
- *               - HENF_HORA
- *               - HDF_HORA
- *               - HNF_HORA
- *               - RNO_HORA
- *               - HEDO_DEC
- *               - HENO_DEC
- *               - HEDF_DEC
- *               - HENF_DEC
- *               - HDF_DEC
- *               - HNF_DEC
- *               - RNO_DEC
- *               - totalExtras_DEC
- *               - totalSuplementarias_DEC
- *               - totalHoras_DEC
- *               - periodo
+ *               - fechaInicio
+ *               - fechaFin
+ *               - tipoOperario
  *             properties:
  *               identificacion_Funcionario:
  *                 type: string
@@ -51,14 +32,17 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
  *               nombre_Funcionario:
  *                 type: string
  *                 example: "Juan Pérez"
- *               fechaInicioReporte:
+ *               fechaInicio:
  *                 type: string
  *                 format: date
- *                 example: "2025-08-01"
- *               fechaFinReporte:
+ *                 example: "01/08/2025"
+ *               fechaFin:
  *                 type: string
  *                 format: date
- *                 example: "2025-08-31"
+ *                 example: "31/08/2025"
+ *               tipoOperario:
+ *                 type: string
+ *                 example: "Obrero"
  *               HEDO_HORA:
  *                 type: string
  *                 example: "02:00"
@@ -104,15 +88,6 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
  *               totalExtras_DEC:
  *                 type: number
  *                 example: 4.75
- *               totalSuplementarias_DEC:
- *                 type: number
- *                 example: 2.58
- *               totalHoras_DEC:
- *                 type: number
- *                 example: 7.33
- *               periodo:
- *                 type: string
- *                 example: "Agosto 2025"
  *     responses:
  *       201:
  *         description: Reporte creado exitosamente
@@ -120,6 +95,7 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
  *         description: Datos inválidos
  */
 router.post('/crear', crearReporte);
+
 
 /**
  * @swagger

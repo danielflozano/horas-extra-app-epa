@@ -33,7 +33,8 @@ const horasExtrasSchema = new mongoose.Schema({
   es_festivo_Inicio: { type: Boolean, default: false },
   es_festivo_Fin: { type: Boolean, default: false },
   dia_semana: { type: String },
-  tipo_dia: { type: String }
+  tipo_dia: { type: String },
+  observaciones: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('HorasExtras', horasExtrasSchema);

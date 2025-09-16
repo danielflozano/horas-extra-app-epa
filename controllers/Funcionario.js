@@ -122,15 +122,19 @@ const listarFuncionariosActivos = async (req, res) => {
 
 const obtenerFuncionarioPorId = async (req, res) => {
     try {
-        const funcionario = await Funcionario.findById(req.params.id).populate('Cargo');
+        const { identificacion } = req.params; 
+        const funcionario = await Funcionario.findOne({ identificacion }).populate('Cargo');
+
         if (!funcionario) {
             return res.status(404).json({ success: false, message: 'Funcionario no encontrado' });
         }
+
         res.json({ success: true, data: funcionario });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error al obtener el funcionario' });
     }
 };
+
 
 
 module.exports = { crearFuncionario, listarFuncionarios, actualizarFuncionario, obtenerFuncionarioPorId, listarFuncionariosActivos};

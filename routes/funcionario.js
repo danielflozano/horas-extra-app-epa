@@ -302,7 +302,7 @@ router.put('/actualizar/:id' ,actualizarFuncionario);
  *       404:
  *         description: Funcionario no encontrado
 */
-router.get('/obtener/:id', obtenerFuncionarioPorId);
+router.get('/obtener/:identificacion', obtenerFuncionarioPorId);
 
 /**
  * @swagger

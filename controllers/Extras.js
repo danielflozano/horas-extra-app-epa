@@ -93,9 +93,7 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
 }
 
 
-// ===================================================================================
-// CONTROLADOR PARA CREAR REGISTRO (AHORA USA LA FUNCIÓN DE VALIDACIÓN)
-// ===================================================================================
+
 const crearExtras = async (req, res) => {
   try {
     const data = req.body;
@@ -111,7 +109,7 @@ const crearExtras = async (req, res) => {
       return res.status(400).json(calculos);
     }
 
-    const nuevaExtra = new Extras({ ...data, ...calculos });
+    const nuevaExtra = new Extras({ ...data, ...calculos, observaciones: data.observaciones || ""  });
     await nuevaExtra.save();
     await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo");
 
@@ -163,9 +161,7 @@ const updateExtra = async (req, res) => {
   }
 };
 
-// ===================================================================================
-// CONTROLADOR PARA EXPORTAR EXCEL (DISEÑO FINAL Y PROPORCIONAL)
-// ===================================================================================
+
 const exportarExtrasExcel = async (req, res) => {
   try {
     const { identificacion, fechaInicio, fechaFin } = req.query;
@@ -212,11 +208,10 @@ const exportarExtrasExcel = async (req, res) => {
         });
     }
     
-    worksheet.mergeCells('P1:S1');
-    const generatedCell = worksheet.getCell('P1');
+    worksheet.mergeCells('Q1:T1');
+    const generatedCell = worksheet.getCell('Q1');
     generatedCell.value = `Generado:\n${moment().format('DD/MM/YYYY HH:mm')}`;
     
-    // --- CAMBIO: Fecha más grande y en negrita ---
     generatedCell.font = { name: 'Calibri', size: 10, bold: true, italic: true };
     generatedCell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
 
@@ -227,6 +222,8 @@ const exportarExtrasExcel = async (req, res) => {
     titleCell.value = 'REGISTRO DE HORAS EXTRAS Y SUPLEMENTARIAS';
     titleCell.font = { name: 'Calibri', size: 16, bold: true };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    
 
     // Fila 3: Subtítulo
     let subtitulo = 'Reporte General';
@@ -246,7 +243,7 @@ const exportarExtrasExcel = async (req, res) => {
       'Cédula', 'Nombre Funcionario', 'Cargo',
       'Fecha Inicio', 'Hora Inicio', 'Fecha Fin', 'Hora Fin',
       'Fecha Inicio Descanso', 'Hora Inicio Descanso', 'Fecha Fin Descanso', 'Hora Fin Descanso',
-      'HEDO', 'HENO', 'HEDF', 'HENF', 'HDF', 'HNF', 'RNO', 'Total Extras'
+      'HEDO', 'HENO', 'HEDF', 'HENF', 'HDF', 'HNF', 'RNO', 'Total Extras', 'Observaciones'
     ];
     const headerRow = worksheet.getRow(5);
     headerRow.values = headers;
@@ -259,6 +256,13 @@ const exportarExtrasExcel = async (req, res) => {
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
     });
+
+    headerRow.eachCell(cell => {
+  cell.border = {
+    ...cell.border,
+    bottom: { style: 'thin', color: { argb: 'FFBFBFBF' } }
+  };
+});
 
     // --- 3. DATOS (empiezan en la fila 6) ---
     if (extras.length === 0) {
@@ -279,11 +283,17 @@ const exportarExtrasExcel = async (req, res) => {
           e.fecha_inicio_descanso ? moment(e.fecha_inicio_descanso).format('DD/MM/YYYY') : '', e.hora_inicio_descanso || '',
           e.fecha_fin_descanso ? moment(e.fecha_fin_descanso).format('DD/MM/YYYY') : '', e.hora_fin_descanso || '',
           e.HEDO || '00:00', e.HENO || '00:00', e.HEDF || '00:00', e.HENF || '00:00',
-          e.HDF || '00:00', e.HNF || '00:00', e.RNO || '00:00', e.horas_extras || '00:00'
+          e.HDF || '00:00', e.HNF || '00:00', e.RNO || '00:00', e.horas_extras || '00:00',
+          e.observaciones|| ''
         ]);
 
         dataRow.eachCell((cell, colNumber) => {
-            cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FF000000' } },
+                left: { style: 'thin', color: { argb: 'FF000000' } },
+                bottom: { style: 'thin', color: { argb: 'FF000000' } },
+                right: { style: 'thin', color: { argb: 'FF000000' } }
+            };
             if (colNumber <= 3) {
                 cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
             } else {
@@ -295,6 +305,7 @@ const exportarExtrasExcel = async (req, res) => {
         });
       });
     }
+
     
     // --- 4. ANCHOS DE COLUMNA Y VISTA ---
     worksheet.columns = [
@@ -302,7 +313,7 @@ const exportarExtrasExcel = async (req, res) => {
         { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, 
         { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
         { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, 
-        { width: 15 } 
+        { width: 15 } ,  { width: 40 } 
     ];
     worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
