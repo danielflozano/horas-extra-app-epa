@@ -90,7 +90,7 @@ const loginUsuario = async (req, res = response) => {
     res.status(500).json({ ok: false, msg: 'Por favor hable con el administrador' });
   }
 };
-// --- NUEVA FUNCIÓN ---
+
 const logoutUsuario = async (req, res = response) => {
   const { refreshtoken } = req.body;
   if (!refreshtoken) {
@@ -106,8 +106,6 @@ const logoutUsuario = async (req, res = response) => {
   }
 };
 
-
-// --- FUNCIÓN REVALIDARTOKEN REEMPLAZADA Y CORREGIDA ---
 const revalidarToken = async (req, res = response) => {
   const { refreshtoken } = req.body;
   if (!refreshtoken) {

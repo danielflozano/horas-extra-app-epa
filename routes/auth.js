@@ -126,25 +126,45 @@ router.post(
  *     summary: Cerrar la sesión de un usuario
  *     tags: [Auth]
  *     security:
- *       - bearerAuth: []
+ *       - bearerAuth: []   # <-- Se requiere access token en headers
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [refreshtoken]
+ *             required:
+ *               - refreshtoken
  *             properties:
  *               refreshtoken:
  *                 type: string
- *                 description: "El token de refresco del usuario para invalidarlo."
+ *                 description: Token de refresco a invalidar.
+ *                 example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *     responses:
  *       200:
  *         description: Sesión cerrada exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 msg:
+ *                   type: string
+ *                   example: "Sesión cerrada exitosamente."
+ *       400:
+ *         description: No se proporcionó el token de refresco.
  *       401:
- *         description: No autorizado (token de acceso inválido).
+ *         description: No autorizado (token de acceso inválido en headers).
+ *       404:
+ *         description: Token de refresco no encontrado o ya eliminado.
+ *       500:
+ *         description: Error en el servidor.
  */
 router.post('/logout', validarJWT, logoutUsuario);
+
 
 /**
  * @swagger
