@@ -26,9 +26,6 @@ function calcularPeriodo(fechaInicio, fechaFin) {
   return 'Anual';
 }
 
-// ===================================================================================
-// CONTROLADOR PARA CREAR/GUARDAR EL REPORTE (SIN CAMBIOS)
-// ===================================================================================
 async function crearReporte(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
@@ -86,6 +83,24 @@ async function crearReporte(req, res) {
     
     const reportesAGuardar = [];
     for (const r of reportesMap.values()) {
+        const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
+        const reporteItem = {
+          identificacion_Funcionario: r.identificacion_Funcionario,
+          nombre_Funcionario: r.nombre_Funcionario,
+          fechaInicioReporte: inicio, fechaFinReporte: fin, tipoOperario: r.tipoOperario, periodo,
+          HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
+          HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
+          HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
+          RNO_HORA: minutosAHHMM(r.RNO),
+          HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)), HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
+          HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)), HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
+          HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)), HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
+          RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
+          totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
+        };
+        reportesAGuardar.push(reporteItem);
+      }
+    
       
       const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
       const reporteItem = {
@@ -173,6 +188,8 @@ async function exportarReporteExcel(req, res) {
 
     const reportesFinales = [];
     for (const r of reportesMap.values()) {
+            reportesFinales.push(r);
+      
         
       reportesFinales.push(r);
         

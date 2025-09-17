@@ -7,9 +7,10 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
-
+// ===================================================================================
+// FUNCION DE VALIDACION CENTRALIZADA
+// ===================================================================================
 async function validarTurnoYHoras(data, idParaExcluir = null) {
-  // 1. Validaciones de formato y campos obligatorios
   const camposObligatorios = ['FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo'];
   for (const campo of camposObligatorios) {
     if (!data[campo]) return { success: false, status: 400, message: `El campo obligatorio '${campo}' es requerido.` };
@@ -17,6 +18,7 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
   if (!mongoose.Types.ObjectId.isValid(data.FuncionarioAsignado)) {
     return { success: false, status: 400, message: 'El ID del FuncionarioAsignado no es válido.' };
   }
+
   const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   const camposDeHora = ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso'];
   for (const campo of camposDeHora) {
@@ -25,32 +27,24 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     }
   }
 
-  // 2. Validaciones de coherencia lógica de fechas y horas
-  const fechaInicio = moment(data.fecha_inicio_trabajo);
-  const fechaFin = moment(data.fecha_fin_trabajo);
-
-  if (fechaFin.isBefore(fechaInicio)) {
-    return { success: false, status: 400, message: 'La fecha de fin no puede ser anterior a la fecha de inicio.' };
-  }
-
   let inicioNuevo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
   let finNuevo = moment(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}`);
 
+  let avisoCambio = null;
+
+  // --- Ajustar automáticamente si cruza medianoche ---
   if (finNuevo.isBefore(inicioNuevo)) {
     finNuevo.add(1, 'day');
+    data.fecha_fin_trabajo = finNuevo.format('YYYY-MM-DD');
+    data.hora_fin_trabajo = finNuevo.format('HH:mm');
+    avisoCambio = `El turno cruzaba medianoche y se ajustó automáticamente: fin ${data.fecha_fin_trabajo} ${data.hora_fin_trabajo}`;
   }
 
   if (!finNuevo.isAfter(inicioNuevo)) {
     return { success: false, status: 400, message: 'La hora de fin debe ser posterior a la hora de inicio.' };
   }
-  if (finNuevo.diff(inicioNuevo, 'hours') > 24) {
-    return { success: false, status: 400, message: 'La duración del turno no puede exceder las 24 horas.' };
-  }
-  if (inicioNuevo.isAfter(moment())) {
-    return { success: false, status: 400, message: 'No se pueden registrar horas para una fecha futura.' };
-  }
 
-  // 3. Validaciones de coherencia del descanso
+  // Validaciones del descanso
   if (data.hora_inicio_descanso && data.hora_fin_descanso) {
     let inicioDesc = moment(`${data.fecha_inicio_descanso}T${data.hora_inicio_descanso}`);
     let finDesc = moment(`${data.fecha_fin_descanso}T${data.hora_fin_descanso}`);
@@ -64,16 +58,14 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     }
   }
 
-  // 4. Validación de solapamiento con registros existentes
+  // Solapamiento
   const filtro = {
     FuncionarioAsignado: data.FuncionarioAsignado,
     fecha_inicio_trabajo: { $lte: finNuevo.format('YYYY-MM-DD') },
     fecha_fin_trabajo: { $gte: inicioNuevo.format('YYYY-MM-DD') }
   };
-  if (idParaExcluir) {
-    filtro._id = { $ne: idParaExcluir };
-  }
-  
+  if (idParaExcluir) filtro._id = { $ne: idParaExcluir };
+
   const registrosExistentes = await Extras.find(filtro).lean();
   for (const existente of registrosExistentes) {
     let inicioExistente = moment(`${existente.fecha_inicio_trabajo.toISOString().split('T')[0]}T${existente.hora_inicio_trabajo}`);
@@ -81,39 +73,46 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     if (finExistente.isBefore(inicioExistente)) finExistente.add(1, 'day');
 
     if (inicioNuevo.isBefore(finExistente) && finNuevo.isAfter(inicioExistente)) {
-      return { 
-        success: false, 
-        status: 409, // Conflict
-        message: `El registro se solapa con un turno existente que va del ${inicioExistente.format('DD/MM/YYYY HH:mm')} al ${finExistente.format('DD/MM/YYYY HH:mm')}.` 
+      return {
+        success: false,
+        status: 409,
+        message: `El registro se solapa con un turno existente que va del ${inicioExistente.format('DD/MM/YYYY HH:mm')} al ${finExistente.format('DD/MM/YYYY HH:mm')}.`
       };
     }
   }
-  
-  return { success: true };
+
+  return { success: true, avisoCambio };
 }
 
-
-
+// ===================================================================================
+// CREAR REGISTRO DE HORAS EXTRAS
+// ===================================================================================
 const crearExtras = async (req, res) => {
   try {
     const data = req.body;
 
-    // Se llama a la función de validación centralizada
     const validacion = await validarTurnoYHoras(data);
     if (!validacion.success) {
       return res.status(validacion.status).json({ success: false, message: validacion.message });
     }
 
     const calculos = calcularHorasExtras(data);
-    if (!calculos.success) {
-      return res.status(400).json(calculos);
-    }
+    if (!calculos.success) return res.status(400).json(calculos);
 
-    const nuevaExtra = new Extras({ ...data, ...calculos, observaciones: data.observaciones || ""  });
+    const nuevaExtra = new Extras({ ...data, ...calculos, observaciones: data.observaciones || "" });
     await nuevaExtra.save();
     await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo");
 
-    res.status(201).json({ success: true, message: 'Registro de horas extras creado exitosamente.', data: nuevaExtra });
+    const respuesta = {
+      success: true,
+      message: 'Registro de horas extras creado exitosamente.',
+      data: nuevaExtra,
+    };
+
+    // Si hubo ajuste de medianoche, se refleja en el JSON
+    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+
+    res.status(201).json(respuesta);
 
   } catch (error) {
     console.error("Error en crearExtras:", error);
@@ -122,30 +121,24 @@ const crearExtras = async (req, res) => {
 };
 
 // ===================================================================================
-// CONTROLADOR PARA ACTUALIZAR REGISTRO (AHORA USA LA FUNCIÓN DE VALIDACIÓN)
+// ACTUALIZAR REGISTRO DE HORAS EXTRAS
 // ===================================================================================
 const updateExtra = async (req, res) => {
   try {
     const { id } = req.params;
     const nuevosDatos = req.body;
-    
+
     const extra = await Extras.findById(id);
     if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
 
     const datosParaValidar = { ...extra.toObject(), ...nuevosDatos };
-    
-    // Se llama a la función de validación centralizada, excluyendo el propio ID
     const validacion = await validarTurnoYHoras(datosParaValidar, id);
-    if (!validacion.success) {
-        return res.status(validacion.status).json({ success: false, message: validacion.message });
-    }
+    if (!validacion.success) return res.status(validacion.status).json({ success: false, message: validacion.message });
 
-    // Aplicar cambios y recalcular si es necesario
     Object.assign(extra, nuevosDatos);
 
-    const camposDeCalculo = ['fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo', 'fecha_inicio_descanso', 'hora_inicio_descanso', 'fecha_fin_descanso', 'hora_fin_descanso'];
+    const camposDeCalculo = ['fecha_inicio_trabajo','hora_inicio_trabajo','fecha_fin_trabajo','hora_fin_trabajo','fecha_inicio_descanso','hora_inicio_descanso','fecha_fin_descanso','hora_fin_descanso'];
     const necesitaRecalcular = camposDeCalculo.some(campo => nuevosDatos[campo] !== undefined);
-
     if (necesitaRecalcular) {
       const calculos = calcularHorasExtras(extra.toObject());
       Object.assign(extra, calculos);
@@ -153,13 +146,22 @@ const updateExtra = async (req, res) => {
 
     await extra.save();
     await extra.populate("FuncionarioAsignado", "nombre_completo");
-    res.status(200).json({ success: true, message: 'Registro actualizado correctamente.', data: extra });
+
+    const respuesta = {
+      success: true,
+      message: 'Registro actualizado correctamente.',
+      data: extra
+    };
+    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+
+    res.status(200).json(respuesta);
 
   } catch (error) {
     console.error("Error en updateExtra:", error);
     res.status(500).json({ success: false, message: error.message || "Ocurrió un error inesperado." });
   }
 };
+
 
 
 const exportarExtrasExcel = async (req, res) => {
