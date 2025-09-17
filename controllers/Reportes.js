@@ -86,26 +86,25 @@ async function crearReporte(req, res) {
     
     const reportesAGuardar = [];
     for (const r of reportesMap.values()) {
-      const totalMinutosRegistrados = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
-      if (totalMinutosRegistrados > 0) {
-        const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
-        const reporteItem = {
-          identificacion_Funcionario: r.identificacion_Funcionario,
-          nombre_Funcionario: r.nombre_Funcionario,
-          fechaInicioReporte: inicio, fechaFinReporte: fin, tipoOperario: r.tipoOperario, periodo,
-          HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
-          HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
-          HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
-          RNO_HORA: minutosAHHMM(r.RNO),
-          HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)), HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
-          HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)), HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
-          HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)), HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
-          RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
-          totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
-        };
-        reportesAGuardar.push(reporteItem);
-      }
+      
+      const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
+      const reporteItem = {
+        identificacion_Funcionario: r.identificacion_Funcionario,
+        nombre_Funcionario: r.nombre_Funcionario,
+        fechaInicioReporte: inicio, fechaFinReporte: fin, tipoOperario: r.tipoOperario, periodo,
+        HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
+        HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
+        HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
+        RNO_HORA: minutosAHHMM(r.RNO),
+        HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)), HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
+        HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)), HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
+        HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)), HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
+        RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
+        totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
+      };
+      reportesAGuardar.push(reporteItem);
     }
+    
     
     if (reportesAGuardar.length === 0) {
         return res.json({ success: true, data: [], mensaje: "Ningún funcionario registró horas en el período seleccionado." });
@@ -130,8 +129,8 @@ async function exportarReporteExcel(req, res) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
     }
 
-    const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
-    const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
+    const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
+    const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
     
     // --- LÓGICA DE CÁLCULO (SIN CAMBIOS) ---
     const filtroFuncionarios = {};
@@ -174,10 +173,9 @@ async function exportarReporteExcel(req, res) {
 
     const reportesFinales = [];
     for (const r of reportesMap.values()) {
-        const totalMinutos = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
-        if (totalMinutos > 0) {
-            reportesFinales.push(r);
-        }
+        
+      reportesFinales.push(r);
+        
     }
     
     if (reportesFinales.length === 0) {
