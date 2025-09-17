@@ -26,9 +26,6 @@ function calcularPeriodo(fechaInicio, fechaFin) {
   return 'Anual';
 }
 
-// ===================================================================================
-// CONTROLADOR PARA CREAR/GUARDAR EL REPORTE (SIN CAMBIOS)
-// ===================================================================================
 async function crearReporte(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
@@ -86,8 +83,6 @@ async function crearReporte(req, res) {
     
     const reportesAGuardar = [];
     for (const r of reportesMap.values()) {
-      const totalMinutosRegistrados = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
-      if (totalMinutosRegistrados > 0) {
         const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
         const reporteItem = {
           identificacion_Funcionario: r.identificacion_Funcionario,
@@ -105,7 +100,7 @@ async function crearReporte(req, res) {
         };
         reportesAGuardar.push(reporteItem);
       }
-    }
+    
     
     if (reportesAGuardar.length === 0) {
         return res.json({ success: true, data: [], mensaje: "Ningún funcionario registró horas en el período seleccionado." });
@@ -174,10 +169,8 @@ async function exportarReporteExcel(req, res) {
 
     const reportesFinales = [];
     for (const r of reportesMap.values()) {
-        const totalMinutos = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
-        if (totalMinutos > 0) {
             reportesFinales.push(r);
-        }
+      
     }
     
     if (reportesFinales.length === 0) {
