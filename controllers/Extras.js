@@ -353,7 +353,7 @@ const listarExtras = async (req, res) => {
 
 const listarExtrasPorIdentificacion = async (req, res) => {
     try {
-        const { identificacion } = req.query;
+        const { identificacion } =  req.params;
         if (!identificacion) return res.status(400).json({ success: false, message: "Falta identificación" });
         
         const func = await Funcionario.findOne({ identificacion });
@@ -372,26 +372,35 @@ const listarExtrasPorIdentificacion = async (req, res) => {
 const listarExtrasPorFechas = async (req, res) => {
     try {
         const { fechaInicio, fechaFin } = req.query;
-        if (!fechaInicio || !fechaFin) return res.status(400).json({ success: false, message: "Faltan fechas" });
+        if (!fechaInicio || !fechaFin) {
+            return res.status(400).json({ success: false, message: "Faltan fechas" });
+        }
 
-        const inicio = new Date(fechaInicio);
-        const fin = new Date(fechaFin);
-        fin.setHours(23, 59, 59, 999);
+        const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
+        const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
 
         const extras = await Extras.find({
-            fecha_inicio_trabajo: { $gte: inicio },
-            fecha_fin_trabajo: { $lte: fin },
-        }).populate({
+            
+            fecha_inicio_trabajo: { $lte: fin },
+            fecha_fin_trabajo: { $gte: inicio },
+        })   
+        .populate({
             path: "FuncionarioAsignado", select: "nombre_completo identificacion",
             populate: { path: "Cargo", select: "name" }
-        }).sort({ fecha_inicio_trabajo: -1 });
+        })
+        .sort({ fecha_inicio_trabajo: -1 });
+        
+        console.log(`Buscando entre ${inicio.toISOString()} y ${fin.toISOString()}`);
+        console.log(`Se encontraron ${extras.length} registros.`);
         
         res.status(200).json({ success: true, data: extras });
+        console.log(`Registros enviados al cliente: ${extras.length}`);
+        
+
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 module.exports = {
     crearExtras,
     updateExtra,

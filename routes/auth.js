@@ -119,7 +119,7 @@ router.post(
   loginUsuario
 );
 
-/**
+/**q
  * @swagger
  * /api/auth/logout:
  *   post:

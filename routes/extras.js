@@ -181,7 +181,7 @@ router.get('/listar',listarExtras)
  *         description: No se encontraron registros
  */
 
-router.get('/funcionario', listarExtrasPorIdentificacion);
+router.get('/:identificacion', listarExtrasPorIdentificacion);
 
 /**
  * @swagger

@@ -112,17 +112,13 @@ const revalidarToken = async (req, res = response) => {
     return res.status(400).json({ ok: false, msg: 'No se proporcionó token de refresco.' });
   }
   try {
-    // 1. Verificar si el token de refresco está en nuestra base de datos
+  
     const refreshTokenDB = await RefreshToken.findOne({ token: refreshtoken });
     if (!refreshTokenDB) {
       return res.status(401).json({ ok: false, msg: 'Token de refresco no válido o sesión cerrada.' });
     }
-
-    // 2. Verificar la firma del token para obtener los datos del usuario
-    // (Asumo que tu helper `generarJWT` no verifica, si lo hace, necesitarás un `verificarJWT`)
     const { uid, name, rol } = jwt.verify(refreshtoken, process.env.JWT_SECRET);
     
-    // 3. Generar un nuevo token de acceso de corta duración
     const nuevoTokenAcceso = await generarJWT(uid, name, rol, '15m');
     
     res.json({
@@ -132,7 +128,6 @@ const revalidarToken = async (req, res = response) => {
     });
 
   } catch (error) {
-    // Esto generalmente ocurre si el token ha expirado
     console.log(error);
     return res.status(401).json({ ok: false, msg: 'Token de refresco expirado o inválido.' });
   }
@@ -140,30 +135,24 @@ const revalidarToken = async (req, res = response) => {
 
 
 const ActualizarDatos = async (req, res = response) => {
-  // El middleware 'SuperAdmin' ya verificó los permisos.
-  // Solo necesitamos el ID del usuario a modificar desde la URL.
+
   const { id } = req.params;
   
-  // Y los datos a actualizar desde el cuerpo de la petición.
   const updateData = req.body;
 
   try {
-    // Es una buena práctica evitar que un admin cambie la contraseña 
-    // o el rol de un usuario accidentalmente desde una ruta de "actualización general".
-    // Si quieres actualizar esos campos, es mejor tener rutas específicas.
     delete updateData.password;
     
-    // Ejecutamos la actualización en un solo paso con los datos correctos.
+  
     const usuarioActualizado = await Usuario.findByIdAndUpdate(
-      id,          // 1. El ID del usuario a actualizar
-      updateData,  // 2. El objeto con los datos que se van a cambiar
-      {            // 3. Opciones
-        new: true, // Devuelve el documento ya actualizado
-        runValidators: true // Ejecuta las validaciones del Schema
+      id,          
+      updateData, 
+      {            
+        new: true, 
+        runValidators: true 
       }
     );
 
-    // Si no se encontró un usuario con ese ID en la base de datos
     if (!usuarioActualizado) {
       return res.status(404).json({
         ok: false,
@@ -171,7 +160,6 @@ const ActualizarDatos = async (req, res = response) => {
       });
     }
 
-    // La actualización fue exitosa
     res.json({
       ok: true,
       msg: 'Usuario actualizado correctamente por el administrador',
@@ -198,12 +186,10 @@ const solicitarReset = async (req, res) => {
         msg: "Si el correo existe, se enviará un código de verificación."
       });
     }
-
-    // Generar código de 6 dígitos
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     usuario.resetCode = resetCode;
-    usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; // expira en 10 min
+    usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; 
     await usuario.save();
 
     const transporter = nodemailer.createTransport({
@@ -213,9 +199,9 @@ const solicitarReset = async (req, res) => {
         pass: config.emailPass
       }
     });
-
+  
     await transporter.sendMail({
-      from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+      from: `"Soporte App" <${config.emailUser}>`,
       to: email,
       subject: "Recuperación de contraseña",
       html: `
@@ -249,7 +235,6 @@ const verificarCodigo = async (req, res) => {
       });
     }
 
-    // Marcar como verificado
     usuario.resetVerified = true;
     await usuario.save();
 

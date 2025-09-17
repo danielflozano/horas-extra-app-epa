@@ -36,8 +36,8 @@ async function crearReporte(req, res) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
     }
 
-    const inicio = moment(fechaInicio, "DD/MM/YYYY").startOf('day').toDate();
-    const fin = moment(fechaFin, "DD/MM/YYYY").endOf('day').toDate();
+    const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
+    const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
     const periodo = calcularPeriodo(inicio, fin);
 
     const deleteQuery = { fechaInicioReporte: { $gte: inicio }, fechaFinReporte: { $lte: fin }};
@@ -239,8 +239,8 @@ async function exportarReporteExcel(req, res) {
         "", "", // A5, B5 vacías para el merge
         "HEDO", "HENO", "HEDF", "HENF", // C5 a F5
         "HDF", "HNF", "RNO",           // G5 a I5
-        "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO", // J5 a P5
-        "" // Q5 vacía para el merge
+        "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO", 
+        "" 
     ];
 
     // Realizar fusiones de celdas
@@ -249,13 +249,13 @@ async function exportarReporteExcel(req, res) {
     worksheet.mergeCells('J4:P4'); worksheet.mergeCells('Q4:Q5');
 
     // Aplicar estilos a todas las celdas de las dos filas de cabecera
-    const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
+    const bordeBlanco = { style: 'thin', color: { argb: '#FFFFFF' } };
     [headerRow4, headerRow5].forEach(row => {
         row.eachCell({ includeEmpty: true }, cell => {
             cell.font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
             cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
+            cell.border = { top: bordeBlanco, left: bordeBlanco, bottom: bordeBlanco, right: bordeBlanco };
         });
     });
 
@@ -273,6 +273,7 @@ async function exportarReporteExcel(req, res) {
         parseFloat((totalExtrasMin / 60).toFixed(2)),
       ]);
 
+      const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
       dataRow.eachCell((cell, colNumber) => {
         cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
         if (colNumber <= 2) {
@@ -295,7 +296,7 @@ async function exportarReporteExcel(req, res) {
       { width: 12 }, { width: 12 }, { width: 12 }, 
       { width: 18 }
     ];
-    worksheet.views = [{ state: 'frozen', ySplit: 5 }];
+
 
     // 5. Envío del Archivo
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
