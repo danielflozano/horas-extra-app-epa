@@ -7,23 +7,21 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 
-// ===================================================================================
-// FUNCION DE VALIDACION CENTRALIZADA
-// ===================================================================================
+
 async function validarTurnoYHoras(data, idParaExcluir = null) {
   const camposObligatorios = ['FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo'];
   for (const campo of camposObligatorios) {
     if (!data[campo]) return { success: false, status: 400, message: `El campo obligatorio '${campo}' es requerido.` };
   }
   if (!mongoose.Types.ObjectId.isValid(data.FuncionarioAsignado)) {
-    return { success: false, status: 400, message: 'El ID del FuncionarioAsignado no es válido.' };
+    return { success: false, status: 400, message: 'El ID del funcionario asignado no es válido.' };
   }
 
   const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   const camposDeHora = ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso'];
   for (const campo of camposDeHora) {
     if (data[campo] && !horaRegex.test(data[campo])) {
-      return { success: false, status: 400, message: `El formato de hora para '${campo}' debe ser HH:MM.` };
+      return { success: false, status: 400, message: `El formato de hora para '${campo}' debe ser HH:MM (ejemplo: 08:30).` };
     }
   }
 
@@ -37,7 +35,7 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     finNuevo.add(1, 'day');
     data.fecha_fin_trabajo = finNuevo.format('YYYY-MM-DD');
     data.hora_fin_trabajo = finNuevo.format('HH:mm');
-    avisoCambio = `El turno cruzaba medianoche y se ajustó automáticamente: fin ${data.fecha_fin_trabajo} ${data.hora_fin_trabajo}`;
+    avisoCambio = `El turno cruzaba medianoche y se ajustó automáticamente: ahora termina el ${data.fecha_fin_trabajo} a las ${data.hora_fin_trabajo}.`;
   }
 
   if (!finNuevo.isAfter(inicioNuevo)) {
@@ -51,14 +49,14 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     if (finDesc.isBefore(inicioDesc)) finDesc.add(1, 'day');
 
     if (!inicioDesc.isBetween(inicioNuevo, finNuevo, undefined, '[]') || !finDesc.isBetween(inicioNuevo, finNuevo, undefined, '[]')) {
-      return { success: false, status: 400, message: 'El período de descanso debe estar completamente dentro del horario de trabajo.' };
+      return { success: false, status: 400, message: 'El período de descanso debe estar completamente dentro del turno de trabajo.' };
     }
     if (finDesc.diff(inicioDesc, 'minutes') >= finNuevo.diff(inicioNuevo, 'minutes')) {
       return { success: false, status: 400, message: 'El descanso no puede durar más que el turno de trabajo.' };
     }
   }
 
-  // Solapamiento
+  // Solapamiento con otros registros
   const filtro = {
     FuncionarioAsignado: data.FuncionarioAsignado,
     fecha_inicio_trabajo: { $lte: finNuevo.format('YYYY-MM-DD') },
@@ -76,7 +74,9 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
       return {
         success: false,
         status: 409,
-        message: `El registro se solapa con un turno existente que va del ${inicioExistente.format('DD/MM/YYYY HH:mm')} al ${finExistente.format('DD/MM/YYYY HH:mm')}.`
+        message: `Ya existe un registro de horas que se cruza con este turno. 
+                  Turno existente: del ${inicioExistente.format('DD/MM/YYYY HH:mm')} al ${finExistente.format('DD/MM/YYYY HH:mm')}. 
+                  Verifique y ajuste los horarios antes de guardar.`
       };
     }
   }
@@ -84,9 +84,6 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
   return { success: true, avisoCambio };
 }
 
-// ===================================================================================
-// CREAR REGISTRO DE HORAS EXTRAS
-// ===================================================================================
 const crearExtras = async (req, res) => {
   try {
     const data = req.body;
@@ -108,8 +105,6 @@ const crearExtras = async (req, res) => {
       message: 'Registro de horas extras creado exitosamente.',
       data: nuevaExtra,
     };
-
-    // Si hubo ajuste de medianoche, se refleja en el JSON
     if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
 
     res.status(201).json(respuesta);
@@ -120,9 +115,7 @@ const crearExtras = async (req, res) => {
   }
 };
 
-// ===================================================================================
-// ACTUALIZAR REGISTRO DE HORAS EXTRAS
-// ===================================================================================
+
 const updateExtra = async (req, res) => {
   try {
     const { id } = req.params;
@@ -163,7 +156,6 @@ const updateExtra = async (req, res) => {
 };
 
 
-
 const exportarExtrasExcel = async (req, res) => {
   try {
     const { identificacion, fechaInicio, fechaFin } = req.query;
@@ -195,25 +187,25 @@ const exportarExtrasExcel = async (req, res) => {
         pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 
+    // 🔹 Función para limpiar valores nulos
+    const safeValue = (val) => (val === null || val === undefined ? '' : val);
+
     // --- 1. DISEÑO DE ENCABEZADO FINAL ---
 
     // Fila 1: Logo y Fecha de Generación
-    worksheet.getRow(1).height = 45; // Aumentar altura para que el logo quepa bien
+    worksheet.getRow(1).height = 45;
     const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
     if (fs.existsSync(logoPath)) {
         const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
-        
-        // --- CAMBIO: Se inserta con tamaño fijo para evitar distorsión ---
         worksheet.addImage(logoId, {
-            tl: { col: 0.5, row: 0.2 }, // Posición
-            ext: { width: 250, height: 100 }  // Tamaño en píxeles (ajusta si es necesario)
+            tl: { col: 0.5, row: 0.2 },
+            ext: { width: 250, height: 100 }
         });
     }
     
     worksheet.mergeCells('Q1:T1');
     const generatedCell = worksheet.getCell('Q1');
     generatedCell.value = `Generado:\n${moment().format('DD/MM/YYYY HH:mm')}`;
-    
     generatedCell.font = { name: 'Calibri', size: 10, bold: true, italic: true };
     generatedCell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
 
@@ -225,8 +217,6 @@ const exportarExtrasExcel = async (req, res) => {
     titleCell.font = { name: 'Calibri', size: 16, bold: true };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    
-
     // Fila 3: Subtítulo
     let subtitulo = 'Reporte General';
     if(funcionarioFiltrado) subtitulo = `Reporte para: ${funcionarioFiltrado.nombre_completo}`;
@@ -237,10 +227,9 @@ const exportarExtrasExcel = async (req, res) => {
     subtitleCell.font = { name: 'Calibri', size: 10, italic: true };
     subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     
-    // Fila 4: Fila vacía para espaciado
-    worksheet.getRow(4).height = 15;
+    worksheet.getRow(4).height = 15; // fila vacía
 
-    // --- 2. CABECERAS DE LA TABLA (en la fila 5) ---
+    // --- 2. CABECERAS DE LA TABLA ---
     const headers = [
       'Cédula', 'Nombre Funcionario', 'Cargo',
       'Fecha Inicio', 'Hora Inicio', 'Fecha Fin', 'Hora Fin',
@@ -259,14 +248,7 @@ const exportarExtrasExcel = async (req, res) => {
       cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
     });
 
-    headerRow.eachCell(cell => {
-  cell.border = {
-    ...cell.border,
-    bottom: { style: 'thin', color: { argb: 'FFBFBFBF' } }
-  };
-});
-
-    // --- 3. DATOS (empiezan en la fila 6) ---
+    // --- 3. DATOS ---
     if (extras.length === 0) {
       const noDataRow = worksheet.addRow(['No se encontraron registros para los filtros seleccionados.']);
       worksheet.mergeCells(`A${noDataRow.number}:S${noDataRow.number}`);
@@ -278,23 +260,21 @@ const exportarExtrasExcel = async (req, res) => {
         if (!e.FuncionarioAsignado) return;
         
         const dataRow = worksheet.addRow([
-          e.FuncionarioAsignado.identificacion || '', e.FuncionarioAsignado.nombre_completo || '',
-          e.FuncionarioAsignado.Cargo?.name || 'N/A',
-          moment(e.fecha_inicio_trabajo).format('DD/MM/YYYY'), e.hora_inicio_trabajo || '',
-          moment(e.fecha_fin_trabajo).format('DD/MM/YYYY'), e.hora_fin_trabajo || '',
-          e.fecha_inicio_descanso ? moment(e.fecha_inicio_descanso).format('DD/MM/YYYY') : '', e.hora_inicio_descanso || '',
-          e.fecha_fin_descanso ? moment(e.fecha_fin_descanso).format('DD/MM/YYYY') : '', e.hora_fin_descanso || '',
-          e.HEDO || '00:00', e.HENO || '00:00', e.HEDF || '00:00', e.HENF || '00:00',
-          e.HDF || '00:00', e.HNF || '00:00', e.RNO || '00:00', e.horas_extras || '00:00',
-          e.observaciones|| ''
+          safeValue(e.FuncionarioAsignado.identificacion),
+          safeValue(e.FuncionarioAsignado.nombre_completo),
+          safeValue(e.FuncionarioAsignado.Cargo?.name) || 'N/A',
+          moment(e.fecha_inicio_trabajo).format('DD/MM/YYYY'), safeValue(e.hora_inicio_trabajo),
+          moment(e.fecha_fin_trabajo).format('DD/MM/YYYY'), safeValue(e.hora_fin_trabajo),
+          e.fecha_inicio_descanso ? moment(e.fecha_inicio_descanso).format('DD/MM/YYYY') : '', safeValue(e.hora_inicio_descanso),
+          e.fecha_fin_descanso ? moment(e.fecha_fin_descanso).format('DD/MM/YYYY') : '', safeValue(e.hora_fin_descanso),
+          safeValue(e.HEDO) || '00:00', safeValue(e.HENO) || '00:00', safeValue(e.HEDF) || '00:00', safeValue(e.HENF) || '00:00',
+          safeValue(e.HDF) || '00:00', safeValue(e.HNF) || '00:00', safeValue(e.RNO) || '00:00', safeValue(e.horas_extras) || '00:00',
+          safeValue(e.observaciones)
         ]);
 
         dataRow.eachCell((cell, colNumber) => {
             cell.border = {
-                top: { style: 'thin', color: { argb: 'FF000000' } },
-                left: { style: 'thin', color: { argb: 'FF000000' } },
-                bottom: { style: 'thin', color: { argb: 'FF000000' } },
-                right: { style: 'thin', color: { argb: 'FF000000' } }
+                top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro
             };
             if (colNumber <= 3) {
                 cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
@@ -308,28 +288,29 @@ const exportarExtrasExcel = async (req, res) => {
       });
     }
 
-    
     // --- 4. ANCHOS DE COLUMNA Y VISTA ---
     worksheet.columns = [
         { width: 18 }, { width: 35 }, { width: 25 }, 
         { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, 
         { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
         { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, 
-        { width: 15 } ,  { width: 40 } 
+        { width: 15 }, { width: 40 } 
     ];
     worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
     // --- 5. ENVÍO DEL ARCHIVO ---
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=Reporte_Horas_Extras.xlsx');
-    await workbook.xlsx.write(res);
-    res.end();
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.send(buffer);
 
   } catch (error) {
     console.error("Error al generar Excel:", error);
     res.status(500).json({ success: false, message: 'Error interno al generar el archivo Excel.' });
   }
 };
+
 
 const eliminarExtras = async (req, res) => {
     try {
