@@ -6,6 +6,7 @@ const RefreshToken = require('../models/refreshToken');
 const nodemailer = require('nodemailer');
 const config = require('../config/config');
 const { generarJWT } = require('../helpers/jwt');
+const validator = require('validator');
 
 // --- FUNCIÓN SIN CAMBIOS ---
 const crearUsuario = async (req, res = response) => {
@@ -178,52 +179,70 @@ const ActualizarDatos = async (req, res = response) => {
   const solicitarReset = async (req, res) => {
     const { email } = req.body;
 
-    try {
-      const usuario = await Usuario.findOne({ email });
-      if (!usuario) {
-        return res.status(200).json({
-          ok: true,
-          msg: "Si el correo existe, se enviará un código de verificación."
-        });
-      }
-      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-      usuario.resetCode = resetCode;
-      usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; 
-      await usuario.save();
-
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: config.emailUser,
-          pass: config.emailPass
-        }
+  try {
+    // 1) Campo presente
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        msg: "Debes ingresar un correo electrónico."
       });
-    
-      await transporter.sendMail({
-        from: `"Soporte App" <${config.emailUser}>`,
-        to: email,
-        subject: "Recuperación de contraseña",
-        html: `
-      <p>Hola ${usuario.name},</p>
-      <p>Tu código de recuperación es:</p>
-      <h2>${resetCode}</h2>
-      <p>Este código vence en 10 minutos.</p>
-    `
-      });
-
-      res.json({
-        ok: true,
-        msg: "Se ha enviado un código de verificación a su correo."
-      });
-
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ ok: false, msg: "Error en el servidor" });
     }
-  };
-  const verificarCodigo = async (req, res) => {
-    const { email, codigo } = req.body;
+
+    // 2) Normalizar y trim
+    const emailNormalized = String(email).trim().toLowerCase();
+
+    // 3) Validar formato
+    if (!validator.isEmail(emailNormalized)) {
+      return res.status(400).json({
+        ok: false,
+        msg: "Formato de correo inválido. Debe ser algo@dominio.com"
+      });
+    }
+
+    // 4) Buscar usuario (asegúrate de guardar los emails en minúsculas en tu BD)
+    const usuario = await Usuario.findOne({ email: emailNormalized });
+
+    if (!usuario) {
+      return res.status(404).json({
+        ok: false,
+        msg: "El correo ingresado no está registrado en el sistema."
+      });
+    }
+
+    // 5) Generar y guardar código
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    usuario.resetCode = resetCode;
+    usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutos
+    await usuario.save();
+
+    // 6) Enviar correo
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: config.emailUser, pass: config.emailPass }
+    });
+
+    await transporter.sendMail({
+      from: `"Soporte App" <${config.emailUser}>`,
+      to: emailNormalized,
+      subject: "Recuperación de contraseña",
+      html: `
+        <p>Hola ${usuario.name},</p>
+        <p>Tu código de recuperación es:</p>
+        <h2>${resetCode}</h2>
+        <p>Este código vence en 10 minutos.</p>
+      `
+    });
+
+    return res.json({ ok: true, msg: "Se ha enviado un código de verificación a su correo." });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, msg: "Error en el servidor." });
+  }
+};
+
+const verificarCodigo = async (req, res) => {
+  const { email, codigo } = req.body;
 
     try {
       const usuario = await Usuario.findOne({ email });

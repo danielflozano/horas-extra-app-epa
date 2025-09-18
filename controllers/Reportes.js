@@ -117,9 +117,7 @@ async function crearReporte(req, res) {
   }
 }
 
-// ===================================================================================
-// CONTROLADOR PARA EXPORTAR REPORTE RESUMIDO (CON DISEÑO DE HEADER COMPLETO)
-// ===================================================================================
+
 async function exportarReporteExcel(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
