@@ -175,123 +175,123 @@ const ActualizarDatos = async (req, res = response) => {
   }
 };
 
-const solicitarReset = async (req, res) => {
-  const { email } = req.body;
+  const solicitarReset = async (req, res) => {
+    const { email } = req.body;
 
-  try {
-    const usuario = await Usuario.findOne({ email });
-    if (!usuario) {
-      return res.status(200).json({
-        ok: true,
-        msg: "Si el correo existe, se enviará un código de verificación."
-      });
-    }
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-    usuario.resetCode = resetCode;
-    usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; 
-    await usuario.save();
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: config.emailUser,
-        pass: config.emailPass
+    try {
+      const usuario = await Usuario.findOne({ email });
+      if (!usuario) {
+        return res.status(200).json({
+          ok: true,
+          msg: "Si el correo existe, se enviará un código de verificación."
+        });
       }
-    });
-  
-    await transporter.sendMail({
-      from: `"Soporte App" <${config.emailUser}>`,
-      to: email,
-      subject: "Recuperación de contraseña",
-      html: `
-    <p>Hola ${usuario.name},</p>
-    <p>Tu código de recuperación es:</p>
-    <h2>${resetCode}</h2>
-    <p>Este código vence en 10 minutos.</p>
-  `
-    });
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    res.json({
-      ok: true,
-      msg: "Se ha enviado un código de verificación a su correo."
-    });
+      usuario.resetCode = resetCode;
+      usuario.resetCodeExpires = Date.now() + 10 * 60 * 1000; 
+      await usuario.save();
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ ok: false, msg: "Error en el servidor" });
-  }
-};
-const verificarCodigo = async (req, res) => {
-  const { email, codigo } = req.body;
-
-  try {
-    const usuario = await Usuario.findOne({ email });
-
-    if (!usuario || usuario.resetCode !== codigo || usuario.resetCodeExpires < Date.now()) {
-      return res.status(400).json({
-        ok: false,
-        msg: "Código inválido o expirado."
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: config.emailUser,
+          pass: config.emailPass
+        }
       });
-    }
-
-    usuario.resetVerified = true;
-    await usuario.save();
-
-    res.json({
-      ok: true,
-      msg: "Código válido, puede cambiar la contraseña."
-    });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ ok: false, msg: "Error en el servidor" });
-  }
-};
-
-
-const resetPassword = async (req, res) => {
-  const { nuevaPassword, confirmarPassword } = req.body;
-
-  try {
-    if (nuevaPassword !== confirmarPassword) {
-      return res.status(400).json({
-        ok: false,
-        msg: "Las contraseñas no coinciden."
+    
+      await transporter.sendMail({
+        from: `"Soporte App" <${config.emailUser}>`,
+        to: email,
+        subject: "Recuperación de contraseña",
+        html: `
+      <p>Hola ${usuario.name},</p>
+      <p>Tu código de recuperación es:</p>
+      <h2>${resetCode}</h2>
+      <p>Este código vence en 10 minutos.</p>
+    `
       });
-    }
 
-    // Buscar usuario que tenga resetVerified = true
-    const usuario = await Usuario.findOne({ resetVerified: true });
-
-    if (!usuario) {
-      return res.status(400).json({
-        ok: false,
-        msg: "No hay un proceso de recuperación activo."
+      res.json({
+        ok: true,
+        msg: "Se ha enviado un código de verificación a su correo."
       });
+
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ ok: false, msg: "Error en el servidor" });
     }
+  };
+  const verificarCodigo = async (req, res) => {
+    const { email, codigo } = req.body;
 
-    // Encriptar nueva contraseña
-    const salt = await bcrypt.genSalt();
-    usuario.password = await bcrypt.hash(nuevaPassword, salt);
+    try {
+      const usuario = await Usuario.findOne({ email });
 
-    // Limpiar datos de recuperación
-    usuario.resetCode = undefined;
-    usuario.resetCodeExpires = undefined;
-    usuario.resetVerified = false;
+      if (!usuario || usuario.resetCode !== codigo || usuario.resetCodeExpires < Date.now()) {
+        return res.status(400).json({
+          ok: false,
+          msg: "Código inválido o expirado."
+        });
+      }
 
-    await usuario.save();
+      usuario.resetVerified = true;
+      await usuario.save();
 
-    res.json({
-      ok: true,
-      msg: "Contraseña restablecida correctamente."
-    });
+      res.json({
+        ok: true,
+        msg: "Código válido, puede cambiar la contraseña."
+      });
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ ok: false, msg: "Error en el servidor" });
-  }
-};
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ ok: false, msg: "Error en el servidor" });
+    }
+  };
+
+
+  const resetPassword = async (req, res) => {
+    const { email, nuevaPassword, confirmarPassword } = req.body;
+
+    try {
+      if (nuevaPassword !== confirmarPassword) {
+        return res.status(400).json({
+          ok: false,
+          msg: "Las contraseñas no coinciden."
+        });
+      }
+
+      // Buscar usuario que tenga resetVerified = true
+      const usuario = await Usuario.findOne({email, resetVerified: true });
+
+      if (!usuario) {
+        return res.status(400).json({
+          ok: false,
+          msg: "No hay un proceso de recuperación activo."
+        });
+      }
+
+      // Encriptar nueva contraseña
+      const salt = await bcrypt.genSalt();
+      usuario.password = await bcrypt.hash(nuevaPassword, salt);
+
+      // Limpiar datos de recuperación
+      usuario.resetCode = undefined;
+      usuario.resetCodeExpires = undefined;
+      usuario.resetVerified = false;
+
+      await usuario.save();
+
+      res.json({
+        ok: true,
+        msg: "Contraseña restablecida correctamente."
+      });
+
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ ok: false, msg: "Error en el servidor" });
+    }
+  };
 
 
 module.exports = {
