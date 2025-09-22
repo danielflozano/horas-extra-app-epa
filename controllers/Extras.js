@@ -337,10 +337,10 @@ const listarExtras = async (req, res) => {
 const listarExtrasPorIdentificacion = async (req, res) => {
     try {
         const { identificacion } =  req.params;
-        if (!identificacion) return res.status(400).json({ success: false, message: "Falta identificación" });
+        if (!identificacion) return res.status(404).json({ success: false, message: "Falta identificación" }); // Cambie esto porque me retornaba success: true, data:[]
         
         const func = await Funcionario.findOne({ identificacion });
-        if (!func) return res.status(200).json({ success: true, data: [] });
+        if (!func) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
 
         const extras = await Extras.find({ FuncionarioAsignado: func._id })
             .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" }})

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { crearExtras, eliminarExtras, updateExtra,listarExtras,
     listarExtrasPorFechas,listarExtrasPorIdentificacion,exportarExtrasExcel } = require('../controllers/Extras');
+const { validarJWT } = require('../middlewares/validar-jwt');
 
 /**
  * @swagger
@@ -80,7 +81,7 @@ const { crearExtras, eliminarExtras, updateExtra,listarExtras,
  *         description: Datos inválidos
  */
 
-router.post('/crear', crearExtras);
+router.post('/crear', validarJWT, crearExtras);
 
 /**
  * @swagger
@@ -102,7 +103,7 @@ router.post('/crear', crearExtras);
  *         description: Registro no encontrado
  */
 
-router.delete('/delete/:id', eliminarExtras);
+router.delete('/delete/:id', validarJWT, eliminarExtras);
 
 /**
  * @swagger
@@ -181,7 +182,7 @@ router.get('/listar',listarExtras)
  *         description: No se encontraron registros
  */
 
-router.get('/:identificacion', listarExtrasPorIdentificacion);
+router.get('/funcionario/:identificacion', listarExtrasPorIdentificacion); // Le agregue /funcionario/ porque así esta en el swagger
 
 /**
  * @swagger

@@ -6,9 +6,9 @@ const { dbConnection } = require('./database/config');
 const os = require('os');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
+const cookieParser = require('cookie-parser');
 
 const PORT =  process.env.PORT || 4000;
-
 
 // Crear servidor de express
 const app = express();
@@ -17,13 +17,18 @@ const app = express();
 dbConnection();
 
 // CORS
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173", // tu frontend (Vite)
+  credentials: true,              // permite enviar cookies
+}));
 
 // Directorio Público
 app.use( express.static('public') );
 
 // Lectura y parseo del body
 app.use(express.json());
+
+app.use(cookieParser());
 
 // Rutas
 // TODO: auth // crear, login, renew

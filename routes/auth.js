@@ -163,7 +163,7 @@ router.post(
  *       500:
  *         description: Error en el servidor.
  */
-router.post('/logout', validarJWT, logoutUsuario);
+router.post('/logout', logoutUsuario); // Eliminé el Middleware validarJWT
 
 
 /**

@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 const config = require('../config/config');
 const { generarJWT } = require('../helpers/jwt');
 const validator = require('validator');
+const jwt = require('jsonwebtoken');
 
 // --- FUNCIÓN SIN CAMBIOS ---
 const crearUsuario = async (req, res = response) => {
@@ -78,14 +79,25 @@ const loginUsuario = async (req, res = response) => {
     await nuevoRefreshToken.save();
     // --- FIN DE LA LÓGICA MODIFICADA ---
 
+    // Aqui mando el refreshToken en una cookie
+    res.cookie('refreshToken', refreshtoken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    });
+
     res.status(200).json({
       ok: true,
-      uid: usuario.id,
-      name: usuario.name,
-      rol: usuario.rol,
       token,
-      refreshtoken
+      message: 'Sesion iniciada exitosamente',
+      user: {
+        uid: usuario.id,
+        name: usuario.name,
+        rol: usuario.rol,
+      }
     });
+
   } catch (error) {
     console.log(error);
     res.status(500).json({ ok: false, msg: 'Por favor hable con el administrador' });
@@ -93,14 +105,23 @@ const loginUsuario = async (req, res = response) => {
 };
 
 const logoutUsuario = async (req, res = response) => {
-  const { refreshtoken } = req.body;
+
+  const refreshtoken = req.cookies.refreshToken;  
+
   if (!refreshtoken) {
-    return res.status(400).json({ ok: false, msg: 'No se proporcionó el token de refresco.' });
+    return res.status(400).json({ ok: false, msg: 'No se proporcionó el token de refresco.'});
   }
   try {
     // Busca y elimina el token de la base de datos
     await RefreshToken.findOneAndDelete({ token: refreshtoken });
-    res.status(200).json({ ok: true, msg: 'Sesión cerrada exitosamente.' });
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    res.status(200).json({ ok: true, msg: 'Sesión cerrada exitosamente.'});
   } catch (error) {
     console.log(error);
     res.status(500).json({ ok: false, msg: 'Error en el servidor' });
@@ -108,20 +129,27 @@ const logoutUsuario = async (req, res = response) => {
 };
 
 const revalidarToken = async (req, res = response) => {
-  const { refreshtoken } = req.body;
+  // 👇 Leer el refresh token desde la cookie
+  const refreshtoken = req.cookies.refreshToken;  
+
   if (!refreshtoken) {
-    return res.status(400).json({ ok: false, msg: 'No se proporcionó token de refresco.' });
+    return res.status(403).json({ ok: false, msg: 'No se proporcionó token de refresco.' });
   }
+
   try {
-  
+    // 1. Validar en BD
     const refreshTokenDB = await RefreshToken.findOne({ token: refreshtoken });
     if (!refreshTokenDB) {
-      return res.status(401).json({ ok: false, msg: 'Token de refresco no válido o sesión cerrada.' });
+      return res.status(403).json({ ok: false, msg: 'Token de refresco no válido o sesión cerrada.' });
     }
-    const { uid, name, rol } = jwt.verify(refreshtoken, process.env.JWT_SECRET);
-    
+
+    // 2. Verificar firma
+    const { uid, name, rol } = jwt.verify(refreshtoken, process.env.SECRET_JWT_SEED);
+
+    // 3. Generar un nuevo access token
     const nuevoTokenAcceso = await generarJWT(uid, name, rol, '15m');
-    
+
+    // 4. Responder con el nuevo token
     res.json({
       ok: true,
       token: nuevoTokenAcceso,
@@ -129,11 +157,13 @@ const revalidarToken = async (req, res = response) => {
     });
 
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ ok: false, msg: 'Token de refresco expirado o inválido.' });
-  }
+    console.log(error);    
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ ok: false, msg: "Refresh token expirado." });
+    }
+    return res.status(401).json({ ok: false, msg: "Token de refresco inválido." });
+}
 };
-
 
 const ActualizarDatos = async (req, res = response) => {
 

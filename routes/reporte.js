@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes');
+const { validarJWT } = require('../middlewares/validar-jwt');
 
 /**
  * @swagger
@@ -94,7 +95,7 @@ const { crearReporte, exportarReporteExcel } = require('../controllers/Reportes'
  *       400:
  *         description: Datos inválidos
  */
-router.post('/crear', crearReporte);
+router.post('/crear', validarJWT, crearReporte);
 
 
 /**
