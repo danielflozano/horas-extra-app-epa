@@ -81,7 +81,7 @@ const { validarJWT } = require('../middlewares/validar-jwt');
  *         description: Datos inválidos
  */
 
-router.post('/crear', validarJWT, crearExtras);
+router.post('/crear', crearExtras);
 
 /**
  * @swagger
