@@ -121,31 +121,48 @@ const updateExtra = async (req, res) => {
     const { id } = req.params;
     const nuevosDatos = req.body;
 
-    const extra = await Extras.findById(id);
-    if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
-
-    const datosParaValidar = { ...extra.toObject(), ...nuevosDatos };
-    const validacion = await validarTurnoYHoras(datosParaValidar, id);
-    if (!validacion.success) return res.status(validacion.status).json({ success: false, message: validacion.message });
-
-    Object.assign(extra, nuevosDatos);
-
-    const camposDeCalculo = ['fecha_inicio_trabajo','hora_inicio_trabajo','fecha_fin_trabajo','hora_fin_trabajo','fecha_inicio_descanso','hora_inicio_descanso','fecha_fin_descanso','hora_fin_descanso'];
-    const necesitaRecalcular = camposDeCalculo.some(campo => nuevosDatos[campo] !== undefined);
-    if (necesitaRecalcular) {
-      const calculos = calcularHorasExtras(extra.toObject());
-      Object.assign(extra, calculos);
+    const extraOriginal = await Extras.findById(id);
+    if (!extraOriginal) {
+      return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
     }
 
-    await extra.save();
-    await extra.populate("FuncionarioAsignado", "nombre_completo");
+    // 1. Crear un objeto con los datos finales (originales + nuevos)
+    // Se asegura de que todos los campos necesarios para la validación y el cálculo estén presentes.
+    const datosFinales = {
+        ...extraOriginal.toObject(),
+        ...nuevosDatos
+    };
+
+    // 2. Validar el turno COMPLETO Y FINAL una sola vez
+    // Se le pasa el 'id' para que la validación de solapamiento se ignore a sí misma.
+    const validacion = await validarTurnoYHoras(datosFinales, id);
+    if (!validacion.success) {
+      return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
+    }
+
+    // 3. Recalcular las horas con los datos ya validados
+    const calculos = calcularHorasExtras(datosFinales);
+    if (!calculos.success) {
+      return res.status(400).json({ success: false, message: calculos.message });
+    }
+    
+    // 4. Actualizar el documento original con los nuevos datos y los nuevos cálculos
+    Object.assign(extraOriginal, nuevosDatos, calculos);
+
+    // 5. Guardar el documento actualizado en la base de datos
+    await extraOriginal.save();
+    
+    // Opcional: Volver a popular los datos del funcionario para la respuesta
+    const extraActualizado = await Extras.findById(extraOriginal._id).populate("FuncionarioAsignado", "nombre_completo");
 
     const respuesta = {
       success: true,
       message: 'Registro actualizado correctamente.',
-      data: extra
+      data: extraActualizado,
     };
-    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+    if (validacion.avisoCambio) {
+        respuesta.aviso = validacion.avisoCambio;
+    }
 
     res.status(200).json(respuesta);
 
@@ -154,7 +171,6 @@ const updateExtra = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || "Ocurrió un error inesperado." });
   }
 };
-
 
 const exportarExtrasExcel = async (req, res) => {
   try {
