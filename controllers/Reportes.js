@@ -26,29 +26,36 @@ function calcularPeriodo(fechaInicio, fechaFin) {
   if (dias <= 31) return 'Mensual';
   return 'Anual';
 }
-
 async function crearReporte(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
-
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
     }
 
-    const inicioReporte = new Date(fechaInicio);
-    const finReporte = new Date(fechaFin);
-    const periodo = calcularPeriodo(inicioReporte, finReporte);
+    const inicioReporte = moment.utc(fechaInicio, "YYYY-MM-DD").startOf("day");
+    const finReporte = moment.utc(fechaFin, "YYYY-MM-DD").endOf("day");
 
-    // Obtener todos los funcionarios según tipo
+    if (!inicioReporte.isValid() || !finReporte.isValid()) {
+      return res.status(400).json({ mensaje: "Formato de fecha inválido. Use YYYY-MM-DD." });
+    }
+    
+    const periodo = calcularPeriodo(inicioReporte.toDate(), finReporte.toDate());
+
+    // Limpiar reportes existentes
+    const deleteQuery = { fechaInicioReporte: { $gte: inicioReporte.toDate() }, fechaFinReporte: { $lte: finReporte.toDate() } };
+    if (tipoOperario) deleteQuery.tipoOperario = tipoOperario;
+    await Reporte.deleteMany(deleteQuery);
+
+    // Obtener funcionarios
     const filtroFuncionarios = {};
     if (tipoOperario) filtroFuncionarios.tipoOperario = tipoOperario;
     const todosLosFuncionarios = await Funcionario.find(filtroFuncionarios);
-
     if (todosLosFuncionarios.length === 0) {
       return res.json({ success: true, data: [], mensaje: "No se encontraron funcionarios." });
     }
 
-    // Inicializar reportes con valores cero
+    // Inicializar mapa de reportes
     const reportesMap = new Map();
     todosLosFuncionarios.forEach(f => {
       reportesMap.set(f._id.toString(), {
@@ -59,64 +66,67 @@ async function crearReporte(req, res) {
       });
     });
 
-    // Traer todas las horas extras en el rango
-    const extras = await HorasExtras.find({
-      FuncionarioAsignado: { $in: todosLosFuncionarios.map(f => f._id) },
-      fecha_inicio_trabajo: { $lte: finReporte }, 
-      fecha_fin_trabajo: { $gte: inicioReporte }
-    });
+    const idsDeFuncionarios = todosLosFuncionarios.map(f => f._id);
+    
+    // Buscar turnos en el rango de fechas
+    const filtroHorasExtras = {
+      FuncionarioAsignado: { $in: idsDeFuncionarios },
+      fecha_inicio_trabajo: { $gte: inicioReporte.toDate(), $lte: finReporte.toDate() }
+    };
+    
+    const extrasEncontradas = await HorasExtras.find(filtroHorasExtras);
 
-    // Sumar horas de cada registro
-    extras.forEach(e => {
-      const r = reportesMap.get(e.FuncionarioAsignado.toString());
-      if (r) {
-        r.HEDO += convertirHorasAMinutos(e.HEDO || "00:00");
-        r.HENO += convertirHorasAMinutos(e.HENO || "00:00");
-        r.HEDF += convertirHorasAMinutos(e.HEDF || "00:00");
-        r.HENF += convertirHorasAMinutos(e.HENF || "00:00");
-        r.HDF += convertirHorasAMinutos(e.HDF || "00:00");
-        r.HNF += convertirHorasAMinutos(e.HNF || "00:00");
-        r.RNO += convertirHorasAMinutos(e.RNO || "00:00");
+    // Sumar las horas extras directamente
+    extrasEncontradas.forEach(e => {
+      const funcionarioEnMapa = reportesMap.get(e.FuncionarioAsignado.toString());
+      if (funcionarioEnMapa) {
+        funcionarioEnMapa.HEDO += convertirHorasAMinutos(e.HEDO || '00:00');
+        funcionarioEnMapa.HENO += convertirHorasAMinutos(e.HENO || '00:00');
+        funcionarioEnMapa.HEDF += convertirHorasAMinutos(e.HEDF || '00:00');
+        funcionarioEnMapa.HENF += convertirHorasAMinutos(e.HENF || '00:00');
+        funcionarioEnMapa.HDF += convertirHorasAMinutos(e.HDF || '00:00');
+        funcionarioEnMapa.HNF += convertirHorasAMinutos(e.HNF || '00:00');
+        funcionarioEnMapa.RNO += convertirHorasAMinutos(e.RNO || '00:00');
       }
     });
 
-    // Construir array final
+    // Generar reportes
     const reportesAGuardar = [];
     for (const r of reportesMap.values()) {
-      const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
-      reportesAGuardar.push({
-        identificacion_Funcionario: r.identificacion_Funcionario,
-        nombre_Funcionario: r.nombre_Funcionario,
-        fechaInicioReporte: inicioReporte,
-        fechaFinReporte: finReporte,
-        tipoOperario: r.tipoOperario,
-        periodo,
-        HEDO_HORA: minutosAHHMM(r.HEDO),
-        HENO_HORA: minutosAHHMM(r.HENO),
-        HEDF_HORA: minutosAHHMM(r.HEDF),
-        HENF_HORA: minutosAHHMM(r.HENF),
-        HDF_HORA: minutosAHHMM(r.HDF),
-        HNF_HORA: minutosAHHMM(r.HNF),
-        RNO_HORA: minutosAHHMM(r.RNO),
-        HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)),
-        HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
-        HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)),
-        HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
-        HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)),
-        HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
-        RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
-        totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2))
-      });
+        const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
+        reportesAGuardar.push({
+            identificacion_Funcionario: r.identificacion_Funcionario,
+            nombre_Funcionario: r.nombre_Funcionario,
+            fechaInicioReporte: inicioReporte.toDate(),
+            fechaFinReporte: finReporte.toDate(),
+            tipoOperario: r.tipoOperario,
+            periodo,
+            HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
+            HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
+            HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
+            RNO_HORA: minutosAHHMM(r.RNO),
+            HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)),
+            HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
+            HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)),
+            HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
+            HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)),
+            HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
+            RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
+            totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
+        });
+    }
+    
+    if (reportesAGuardar.length > 0) {
+      await Reporte.insertMany(reportesAGuardar);
     }
 
     res.json({ success: true, data: reportesAGuardar });
 
   } catch (err) {
-    console.error(err);
+    console.error("Error en crearReporte:", err);
     res.status(500).json({ success: false, mensaje: "Error creando el reporte", error: err.message });
   }
 }
-
 
 async function exportarReporteExcel(req, res) {
   try {
@@ -125,8 +135,13 @@ async function exportarReporteExcel(req, res) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
     }
 
-    const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
-    const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
+    // CORRECCIÓN: Usar el mismo formato de fecha que en crearReporte
+    const inicioReporte = moment.utc(fechaInicio, "YYYY-MM-DD").startOf("day");
+    const finReporte = moment.utc(fechaFin, "YYYY-MM-DD").endOf("day");
+
+    if (!inicioReporte.isValid() || !finReporte.isValid()) {
+      return res.status(400).json({ mensaje: "Formato de fecha inválido. Use YYYY-MM-DD." });
+    }
     
     // --- Filtrar funcionarios según tipo ---
     const filtroFuncionarios = {};
@@ -136,7 +151,6 @@ async function exportarReporteExcel(req, res) {
       return res.status(404).json({ mensaje: "No se encontraron funcionarios." });
     }
 
-    // --- Crear mapa de reportes inicial con cero ---
     const reportesMap = new Map();
     todosLosFuncionarios.forEach(f => {
       reportesMap.set(f._id.toString(), {
@@ -146,26 +160,26 @@ async function exportarReporteExcel(req, res) {
       });
     });
 
-    // --- Filtrar horas extras dentro del rango ---
+    // CORRECCIÓN: Usar la misma lógica de filtrado que en crearReporte
     const idsDeFuncionarios = todosLosFuncionarios.map(f => f._id);
-    const extrasEncontradas = await HorasExtras.find({
+    const filtroHorasExtras = {
       FuncionarioAsignado: { $in: idsDeFuncionarios },
-      fecha_inicio_trabajo: { $lte: fin },
-      fecha_fin_trabajo: { $gte: inicio }
-    });
+      fecha_inicio_trabajo: { $gte: inicioReporte.toDate(), $lte: finReporte.toDate() }
+    };
+    
+    const extrasEncontradas = await HorasExtras.find(filtroHorasExtras);
 
-    // --- Sumar horas correctamente ---
+    // CORRECCIÓN: Sumar las horas extras directamente (igual que en crearReporte)
     extrasEncontradas.forEach(e => {
-      const id = e.FuncionarioAsignado.toString();
-      const func = reportesMap.get(id);
-      if (func) {
-        func.HEDO += convertirHorasAMinutos(e.HEDO);
-        func.HENO += convertirHorasAMinutos(e.HENO);
-        func.HEDF += convertirHorasAMinutos(e.HEDF);
-        func.HENF += convertirHorasAMinutos(e.HENF);
-        func.HDF += convertirHorasAMinutos(e.HDF);
-        func.HNF += convertirHorasAMinutos(e.HNF);
-        func.RNO += convertirHorasAMinutos(e.RNO);
+      const funcionarioEnMapa = reportesMap.get(e.FuncionarioAsignado.toString());
+      if (funcionarioEnMapa) {
+        funcionarioEnMapa.HEDO += convertirHorasAMinutos(e.HEDO || '00:00');
+        funcionarioEnMapa.HENO += convertirHorasAMinutos(e.HENO || '00:00');
+        funcionarioEnMapa.HEDF += convertirHorasAMinutos(e.HEDF || '00:00');
+        funcionarioEnMapa.HENF += convertirHorasAMinutos(e.HENF || '00:00');
+        funcionarioEnMapa.HDF += convertirHorasAMinutos(e.HDF || '00:00');
+        funcionarioEnMapa.HNF += convertirHorasAMinutos(e.HNF || '00:00');
+        funcionarioEnMapa.RNO += convertirHorasAMinutos(e.RNO || '00:00');
       }
     });
 
@@ -176,6 +190,7 @@ async function exportarReporteExcel(req, res) {
     }
 
     reportesFinales.sort((a, b) => a.nombre_Funcionario.localeCompare(b.nombre_Funcionario));
+    console.log(`Turnos encontrados: ${extrasEncontradas.length}`);
 
     // --- CONSTRUCCIÓN DEL EXCEL ---
     const workbook = new ExcelJS.Workbook();
@@ -248,7 +263,7 @@ async function exportarReporteExcel(req, res) {
 
     // --- 3. Datos de la Tabla ---
     reportesFinales.forEach((r, index) => {
-      const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF + r.HDF + r.HNF + r.RNO;
+      const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
       const dataRow = worksheet.addRow([
         r.identificacion_Funcionario, r.nombre_Funcionario,
         minutosAHHMM(r.HEDO), minutosAHHMM(r.HENO), minutosAHHMM(r.HEDF), minutosAHHMM(r.HENF),
@@ -259,7 +274,7 @@ async function exportarReporteExcel(req, res) {
         parseFloat((r.RNO / 60).toFixed(2)),
         parseFloat((totalExtrasMin / 60).toFixed(2)),
       ]);
-
+      
       const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
       dataRow.eachCell((cell, colNumber) => {
         cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };

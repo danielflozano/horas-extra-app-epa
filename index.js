@@ -18,8 +18,8 @@ dbConnection();
 
 // CORS
 app.use(cors({
-  origin: "http://localhost:5173", // tu frontend (Vite)
-  credentials: true,              // permite enviar cookies
+  origin: "http://localhost:5173", 
+  credentials: true,              
 }));
 
 // Directorio Público
@@ -27,6 +27,7 @@ app.use( express.static('public') );
 
 // Lectura y parseo del body
 app.use(express.json());
+
 
 app.use(cookieParser());
 

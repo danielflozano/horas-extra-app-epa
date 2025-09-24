@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Importar Horas Extras desde Excel</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #002060; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="file"], select, button { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { cursor: pointer; background-color: #002060; color: white; border: none; font-size: 1em; transition: background-color 0.2s; margin-top: 10px; }
+        button:hover { background-color: #003399; }
+        button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        .hidden { display: none; }
+        #status-message { text-align: center; margin-top: 20px; font-style: italic; color: #555; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 5px; text-align: left; font-size: 0.9em; }
+        th { background-color: #e6f0ff; }
+        td { word-break: break-word; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Importar Horas Extras</h1>
+    
+    <form id="upload-form">
+        <div class="form-group">
+            <label for="file-input">1. Selecciona el archivo Excel:</label>
+            <input type="file" id="file-input" name="file" accept=".xlsx, .xls, .ods" required>
+        </div>
+        
+        <div id="sheet-selector-group" class="form-group hidden">
+            <label for="sheet-selector">2. Elige la hoja a importar:</label>
+            <select id="sheet-selector" name="nombreHoja"></select>
+        </div>
+        
+        <button type="button" id="import-button" disabled>Importar Archivo</button>
+    </form>
+    
+    <p id="status-message"></p>
+
+    <!-- NUEVO: Tabla de horas extras -->
+    <h2>Horas Extras Registradas</h2>
+    <button id="btn-cargar">Cargar Todas las Horas Extras</button>
+    <div id="tabla-container"></div>
+</div>
+
+<script>
+    // --- CONFIGURACIÓN ---
+    const API_BASE_URL = 'http://localhost:4000/api/extras'; // Ajusta la URL base a tu API
+    const API_SHEETS = `${API_BASE_URL}/sheets`;
+    const API_IMPORT = `${API_BASE_URL}/importar`;
+    const API_LISTAR = `${API_BASE_URL}/listar`;
+
+    // --- ELEMENTOS DEL DOM ---
+    const fileInput = document.getElementById('file-input');
+    const sheetSelectorGroup = document.getElementById('sheet-selector-group');
+    const sheetSelector = document.getElementById('sheet-selector');
+    const importButton = document.getElementById('import-button');
+    const statusMessage = document.getElementById('status-message');
+    const btnCargar = document.getElementById('btn-cargar');
+    const tablaContainer = document.getElementById('tabla-container');
+
+    // --- LÓGICA DE EVENTOS ---
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            sheetSelectorGroup.classList.add('hidden');
+            importButton.disabled = true;
+            return;
+        }
+        await getSheetNames(file);
+    });
+
+    importButton.addEventListener('click', async () => {
+        const file = fileInput.files[0];
+        const sheetName = sheetSelector.value;
+        if (!file || !sheetName) {
+            alert('Por favor, selecciona un archivo y una hoja.');
+            return;
+        }
+        await importFile(file, sheetName);
+    });
+
+    btnCargar.addEventListener('click', async () => {
+        btnCargar.disabled = true;
+        tablaContainer.innerHTML = 'Cargando datos...';
+        try {
+            const response = await fetch(API_LISTAR);
+            const datos = await response.json();
+            if (!response.ok) throw new Error(datos.error || 'Error al cargar los datos.');
+            renderTabla(datos.data || datos);
+        } catch (error) {
+            tablaContainer.innerHTML = `Error: ${error.message}`;
+        } finally {
+            btnCargar.disabled = false;
+        }
+    });
+
+    // --- FUNCIONES DE LA API ---
+    async function getSheetNames(file) {
+        statusMessage.textContent = 'Leyendo hojas del archivo...';
+        document.body.style.cursor = 'wait';
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch(API_SHEETS, { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'No se pudo leer el archivo.');
+            populateSheetSelector(result.sheetNames);
+            statusMessage.textContent = 'Archivo listo. Por favor, selecciona una hoja.';
+        } catch (error) {
+            statusMessage.textContent = `Error: ${error.message}`;
+            sheetSelectorGroup.classList.add('hidden');
+            importButton.disabled = true;
+        } finally {
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    async function importFile(file, sheetName) {
+        statusMessage.textContent = 'Importando datos, por favor espera...';
+        document.body.style.cursor = 'wait';
+        importButton.disabled = true;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('nombreHoja', sheetName);
+        try {
+            const response = await fetch(API_IMPORT, { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Error al importar los datos.');
+            statusMessage.textContent = `${result.message} - Se procesaron ${result.data.length} registros.`;
+        } catch (error) {
+            statusMessage.textContent = `Error: ${error.message}`;
+        } finally {
+            document.body.style.cursor = 'default';
+            importButton.disabled = false;
+        }
+    }
+
+    function populateSheetSelector(sheetNames) {
+        sheetSelector.innerHTML = '';
+        if (sheetNames && sheetNames.length > 0) {
+            sheetNames.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                sheetSelector.appendChild(option);
+            });
+            sheetSelectorGroup.classList.remove('hidden');
+            importButton.disabled = false;
+        } else {
+            statusMessage.textContent = 'El archivo no contiene hojas legibles.';
+            sheetSelectorGroup.classList.add('hidden');
+            importButton.disabled = true;
+        }
+    }
+
+    // --- FUNCIONES AUXILIARES PARA LA TABLA ---
+    function renderTabla(datos) {
+        tablaContainer.innerHTML = '';
+        if (!datos || datos.length === 0) {
+            tablaContainer.innerHTML = '<p>No hay registros para mostrar.</p>';
+            return;
+        }
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        const headers = [];
+        datos.forEach(item => {
+            Object.keys(item).forEach(k => {
+                if (!headers.includes(k)) headers.push(k);
+            });
+        });
+
+        const trHead = document.createElement('tr');
+        headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        datos.forEach(row => {
+            const tr = document.createElement('tr');
+            headers.forEach(h => {
+                const td = document.createElement('td');
+                let valor = row[h];
+                if (valor && typeof valor === 'object') valor = JSON.stringify(valor);
+                td.textContent = valor !== null && valor !== undefined ? valor : '';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        tablaContainer.appendChild(table);
+    }
+</script>
+
+</body>
+</html>

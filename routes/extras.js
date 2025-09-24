@@ -3,6 +3,8 @@ const router = express.Router();
 const { crearExtras, eliminarExtras, updateExtra,listarExtras,
     listarExtrasPorFechas,listarExtrasPorIdentificacion,exportarExtrasExcel } = require('../controllers/Extras');
 const { validarJWT } = require('../middlewares/validar-jwt');
+const {importarExcel,obtenerNombresDeHojas} = require('../controllers/exportar');
+const multer = require("multer");
 
 /**
  * @swagger
@@ -247,5 +249,17 @@ router.get('/fechas', listarExtrasPorFechas);
 
 router.get('/exportar', exportarExtrasExcel);
 
+const upload = multer({ storage: multer.memoryStorage() });
+router.post(
+    "/sheets", 
+    upload.single("file"), 
+    obtenerNombresDeHojas
+);
+
+router.post(
+    "/importar", 
+    upload.single("file"), 
+    importarExcel
+);
 
 module.exports = router;

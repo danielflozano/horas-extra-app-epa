@@ -162,6 +162,9 @@ const exportarExtrasExcel = async (req, res) => {
     let query = {};
     let funcionarioFiltrado = null;
 
+    console.log("Valor de fechaInicio recibido:",  req.query);
+  
+
     if (identificacion) {
       const func = await Funcionario.findOne({ identificacion });
       if (!func) {
@@ -171,12 +174,17 @@ const exportarExtrasExcel = async (req, res) => {
       funcionarioFiltrado = func;
     }
 
-    if (fechaInicio && fechaFin) {
-      const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
-      const fin = moment(fechaFin, "YYYY-MM-DD").endOf('day').toDate();
-      query.fecha_inicio_trabajo = { $lte: fin };
-      query.fecha_fin_trabajo = { $gte: inicio };
-    }
+   if (fechaInicio && fechaFin) {
+  const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
+  const fin = moment(fechaFin, "YYYY-MM-DD").endOf('day').toDate();
+  
+  query.fecha_inicio_trabajo = { $lte: fin };
+  query.fecha_fin_trabajo = { $gte: inicio };
+
+   console.log("Las fechas se procesaron correctamente:", inicio, fin);
+}
+ 
+
 
     const extras = await Extras.find(query)
       .populate({ path: 'FuncionarioAsignado', select: 'nombre_completo identificacion Cargo', populate: { path: 'Cargo', select: 'name' } })
@@ -190,9 +198,6 @@ const exportarExtrasExcel = async (req, res) => {
     // 🔹 Función para limpiar valores nulos
     const safeValue = (val) => (val === null || val === undefined ? '' : val);
 
-    // --- 1. DISEÑO DE ENCABEZADO FINAL ---
-
-    // Fila 1: Logo y Fecha de Generación
     worksheet.getRow(1).height = 45;
     const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
     if (fs.existsSync(logoPath)) {
@@ -304,6 +309,7 @@ const exportarExtrasExcel = async (req, res) => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     res.send(buffer);
+  
 
   } catch (error) {
     console.error("Error al generar Excel:", error);
@@ -329,6 +335,8 @@ const listarExtras = async (req, res) => {
             .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" }})
             .sort({ fecha_inicio_trabajo: -1 });
         res.status(200).json({ success: true, data: extras });
+        console.log(extras);
+        
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -391,5 +399,6 @@ module.exports = {
     listarExtras,
     listarExtrasPorIdentificacion,
     listarExtrasPorFechas,
-    exportarExtrasExcel
+    exportarExtrasExcel,
+    validarTurnoYHoras
 };
