@@ -154,8 +154,6 @@ const updateExtra = async (req, res) => {
         ...nuevosDatos
     };
 
-    // 2. Validar el turno COMPLETO Y FINAL una sola vez
-    // Se le pasa el 'id' para que la validación de solapamiento se ignore a sí misma.
     const validacion = await validarTurnoYHoras(datosFinales, id);
     if (!validacion.success) {
       return res.status(validacion.status || 400).json({ success: false, message: validacion.message });

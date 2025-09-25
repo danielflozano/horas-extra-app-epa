@@ -83,7 +83,7 @@ const multer = require("multer");
  *         description: Datos inválidos
  */
 
-router.post('/crear', crearExtras);
+router.post('/crear',validarJWT, crearExtras);
 
 /**
  * @swagger
@@ -105,7 +105,7 @@ router.post('/crear', crearExtras);
  *         description: Registro no encontrado
  */
 
-router.delete('/delete/:id', eliminarExtras);
+router.delete('/delete/:id',validarJWT, eliminarExtras);
 
 /**
  * @swagger
@@ -148,7 +148,7 @@ router.delete('/delete/:id', eliminarExtras);
  *         description: Registro no encontrado
  */
 
-router.put('/update/:id', updateExtra);
+router.put('/update/:id',validarJWT, updateExtra);
 
 /**
  * @swagger
@@ -184,8 +184,7 @@ router.get('/listar',listarExtras)
  *         description: No se encontraron registros
  */
 
-router.get('/funcionario/:identificacion', listarExtrasPorIdentificacion); // Le agregue /funcionario/ porque así esta en el swagger
-
+router.get('/funcionario/:identificacion', listarExtrasPorIdentificacion); 
 /**
  * @swagger
  * /api/extras/fechas:
@@ -249,6 +248,44 @@ router.get('/fechas', listarExtrasPorFechas);
 
 router.get('/exportar', exportarExtrasExcel);
 
+
+/**
+ * @swagger
+ * /api/extras/sheets:
+ *   post:
+ *     summary: Obtiene los nombres de las hojas de un archivo Excel subido
+ *     tags:
+ *       - Importar Extras
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Archivo Excel a procesar
+ *     responses:
+ *       200:
+ *         description: Lista de nombres de hojas en el Excel
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 sheetNames:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       400:
+ *         description: Error por archivo faltante o inválido
+ *       500:
+ *         description: Error interno al procesar el Excel
+ */
 const upload = multer({ storage: multer.memoryStorage() });
 router.post(
     "/sheets", 
@@ -256,6 +293,57 @@ router.post(
     obtenerNombresDeHojas
 );
 
+/**
+ * @swagger
+ * /api/extras/importar:
+ *   post:
+ *     summary: Importa un archivo Excel con los datos de funcionarios y horas extras
+ *     tags:
+ *       - Importar Extras
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Archivo Excel a procesar
+ *               nombreHoja:
+ *                 type: string
+ *                 description: Nombre de la hoja específica a procesar (opcional)
+ *     responses:
+ *       200:
+ *         description: Importación finalizada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 resumen:
+ *                   type: object
+ *                   properties:
+ *                     registrosGuardados:
+ *                       type: integer
+ *                     registrosFallidos:
+ *                       type: integer
+ *                     funcionariosCreados:
+ *                       type: integer
+ *                     cargosCreados:
+ *                       type: integer
+ *                     errores:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *       400:
+ *         description: Error por archivo faltante o datos inválidos
+ *       500:
+ *         description: Error interno al procesar el archivo
+ */
 router.post(
     "/importar", 
     upload.single("file"), 
