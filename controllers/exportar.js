@@ -307,7 +307,7 @@ const importarExcel = async (req, res) => {
                 const validacion = await validarTurnoYHoras(registroLimpio);
                 if (!validacion.success) throw new Error(validacion.message);
 
-                const calculos = calcularHorasExtras(registroLimpio);
+                const calculos = await calcularHorasExtras(registroLimpio);
                 if (!calculos.success) throw new Error(calculos.message || "Error en cálculo.");
 
                 const datosParaGuardar = { ...registroLimpio, ...calculos };
@@ -330,4 +330,3 @@ const importarExcel = async (req, res) => {
 };
 
 module.exports = { importarExcel, obtenerNombresDeHojas };
-
