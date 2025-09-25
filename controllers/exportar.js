@@ -295,7 +295,6 @@ const importarExcel = async (req, res) => {
                     const valor = row[index];
                     const convertido = formatearCelda(valor, campoModelo);
 
-                    // 👀 Debug especial para descansos
                     if (campoModelo.includes("descanso")) {
                         if (valor && !convertido) {
                             console.warn(`⚠️ Fila ${filaActual}: El campo ${campoModelo} venía con valor en Excel pero quedó vacío al convertir. Valor original:`, valor);

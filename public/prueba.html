@@ -42,10 +42,6 @@
     
     <p id="status-message"></p>
 
-    <!-- NUEVO: Tabla de horas extras -->
-    <h2>Horas Extras Registradas</h2>
-    <button id="btn-cargar">Cargar Todas las Horas Extras</button>
-    <div id="tabla-container"></div>
 </div>
 
 <script>
@@ -53,7 +49,6 @@
     const API_BASE_URL = 'http://localhost:4000/api/extras'; // Ajusta la URL base a tu API
     const API_SHEETS = `${API_BASE_URL}/sheets`;
     const API_IMPORT = `${API_BASE_URL}/importar`;
-    const API_LISTAR = `${API_BASE_URL}/listar`;
 
     // --- ELEMENTOS DEL DOM ---
     const fileInput = document.getElementById('file-input');
@@ -157,50 +152,6 @@
             sheetSelectorGroup.classList.add('hidden');
             importButton.disabled = true;
         }
-    }
-
-    // --- FUNCIONES AUXILIARES PARA LA TABLA ---
-    function renderTabla(datos) {
-        tablaContainer.innerHTML = '';
-        if (!datos || datos.length === 0) {
-            tablaContainer.innerHTML = '<p>No hay registros para mostrar.</p>';
-            return;
-        }
-
-        const table = document.createElement('table');
-        const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-
-        const headers = [];
-        datos.forEach(item => {
-            Object.keys(item).forEach(k => {
-                if (!headers.includes(k)) headers.push(k);
-            });
-        });
-
-        const trHead = document.createElement('tr');
-        headers.forEach(h => {
-            const th = document.createElement('th');
-            th.textContent = h;
-            trHead.appendChild(th);
-        });
-        thead.appendChild(trHead);
-        table.appendChild(thead);
-
-        datos.forEach(row => {
-            const tr = document.createElement('tr');
-            headers.forEach(h => {
-                const td = document.createElement('td');
-                let valor = row[h];
-                if (valor && typeof valor === 'object') valor = JSON.stringify(valor);
-                td.textContent = valor !== null && valor !== undefined ? valor : '';
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-        });
-
-        table.appendChild(tbody);
-        tablaContainer.appendChild(table);
     }
 </script>
 

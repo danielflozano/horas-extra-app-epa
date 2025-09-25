@@ -86,26 +86,48 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
 
 const crearExtras = async (req, res) => {
   try {
-    const data = req.body;
+    let data = req.body;
 
+    // 1. Validar los datos de entrada (formato, lógica, solapamientos)
     const validacion = await validarTurnoYHoras(data);
     if (!validacion.success) {
-      return res.status(validacion.status).json({ success: false, message: validacion.message });
+      return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
+    }
+    if (validacion.dataAjustada) {
+        data = validacion.dataAjustada;
     }
 
-    const calculos = calcularHorasExtras(data);
-    if (!calculos.success) return res.status(400).json(calculos);
+    // 2. Calcular el desglose de horas
+    const calculos = await calcularHorasExtras(data);
+    if (!calculos.success) {
+      return res.status(400).json({ success: false, message: calculos.message });
+    }
 
-    const nuevaExtra = new Extras({ ...data, ...calculos, observaciones: data.observaciones || "" });
+    if (calculos.hora_fin_trabajo_ajustada) {
+        data.hora_fin_trabajo = calculos.hora_fin_trabajo_ajustada;
+        data.fecha_fin_trabajo = calculos.fecha_fin_trabajo_ajustada;
+    }
+
+    const nuevaExtra = new Extras({ 
+        ...data, 
+        ...calculos, 
+        observaciones: data.observaciones || "" 
+    });
+    
     await nuevaExtra.save();
-    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo");
+    
+    // Poblar los datos del funcionario para la respuesta
+    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo tipoOperario");
 
+    // 5. Preparar y enviar la respuesta final
     const respuesta = {
       success: true,
       message: 'Registro de horas extras creado exitosamente.',
       data: nuevaExtra,
     };
-    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+    if (validacion.avisoCambio) {
+      respuesta.aviso = validacion.avisoCambio;
+    }
 
     res.status(201).json(respuesta);
 
@@ -114,7 +136,6 @@ const crearExtras = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || "Ocurrió un error inesperado." });
   }
 };
-
 
 const updateExtra = async (req, res) => {
   try {

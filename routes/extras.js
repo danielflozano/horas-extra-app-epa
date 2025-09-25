@@ -105,7 +105,7 @@ router.post('/crear', crearExtras);
  *         description: Registro no encontrado
  */
 
-router.delete('/delete/:id', validarJWT, eliminarExtras);
+router.delete('/delete/:id', eliminarExtras);
 
 /**
  * @swagger
