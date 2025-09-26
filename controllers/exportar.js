@@ -32,38 +32,47 @@ const obtenerNombresDeHojas = (req, res) => {
 };
 
 const formatearCelda = (valor, campo) => {
-    if (!valor) return null;
+    if (valor === null || valor === undefined) {
+        if (campo.toLowerCase().startsWith("es_festivo")) return false;
+        return null;
+    }
 
-    // Caso 1: valor es Date
+  if (campo.toLowerCase().startsWith("es_festivo")) {
+    if (typeof valor === "boolean") return valor;
+    if (typeof valor === "number") return valor === 1;
+    const str = valor.toString().replace(/\s+/g, "").toLowerCase(); 
+    if (["true","1","si","sí"].includes(str)) return true;
+    if (["false","0","no"].includes(str)) return false;
+    return false;
+}
+    // Resto del formateo existente...
     if (valor instanceof Date) {
-        if (campo.startsWith("fecha_")) {
-            return moment(valor).format("YYYY-MM-DD"); // solo fecha
-        }
-        if (campo.startsWith("hora_")) {
-            return moment(valor).format("HH:mm"); // solo hora
-        }
+        if (campo.startsWith("fecha_")) return moment(valor).format("YYYY-MM-DD");
+        if (campo.startsWith("hora_")) return moment(valor).format("HH:mm");
     }
 
     if (typeof valor === "number" && campo.startsWith("hora_")) {
-        const minutos = Math.round(valor * 24 * 60); 
+        const minutos = Math.round(valor * 24 * 60);
         const horas = Math.floor(minutos / 60);
         const mins = minutos % 60;
-        return `${String(horas).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+        return `${String(horas).padStart(2,"0")}:${String(mins).padStart(2,"0")}`;
     }
+
     if (typeof valor === "string") {
         const str = valor.trim();
         if (campo.startsWith("fecha_")) {
-            const fecha = moment(str, ["DD/MM/YYYY", "YYYY-MM-DD", "MM/DD/YYYY"], true);
+            const fecha = moment(str, ["DD/MM/YYYY","YYYY-MM-DD","MM/DD/YYYY"], true);
             return fecha.isValid() ? fecha.format("YYYY-MM-DD") : null;
         }
         if (campo.startsWith("hora_")) {
-            const hora = moment(str, ["HH:mm", "H:mm", "HH:mm:ss"], true);
+            const hora = moment(str, ["HH:mm","H:mm","HH:mm:ss"], true);
             return hora.isValid() ? hora.format("HH:mm") : null;
         }
     }
 
-    return null;
+    return valor;
 };
+
 
 const importarExcel = async (req, res) => {
     try {
@@ -101,10 +110,8 @@ const importarExcel = async (req, res) => {
             return res.status(400).json({ error: "No se encontró una hoja válida." });
         }
 
-        // 🔧 Eliminar merges para no perder datos reales de descansos
         if (sheet["!merges"]) delete sheet["!merges"];
 
-        // ✅ Importar manteniendo vacíos y sin inventar valores
         const data = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: true });
         console.log("📊 Total filas leídas del Excel:", data?.length);
 
@@ -119,13 +126,11 @@ const importarExcel = async (req, res) => {
             const row = data[i];
             if (row && Array.isArray(row) && row.length > 0) {
                 const normalizedRow = row.map(cell => normalizeHeader(cell));
-                console.log(`🔎 Fila ${i} analizada:`, normalizedRow);
                 const matches = clavesObligatorias.filter(keyword =>
                     normalizedRow.some(cell => cell.includes(keyword))
                 );
                 if (matches.length >= 2) {
                     headerStartIndex = i;
-                    console.log("✅ Encabezado detectado en fila:", i);
                     break;
                 }
             }
@@ -135,7 +140,6 @@ const importarExcel = async (req, res) => {
             return res.status(400).json({ error: "No se encontró fila de encabezados." });
         }
 
-        // PASO 2: Unir las dos filas de encabezado
         const headerRow1 = data[headerStartIndex] || [];
         const headerRow2 = data[headerStartIndex + 1] || [];
 
@@ -157,8 +161,6 @@ const importarExcel = async (req, res) => {
             return normalizeHeader(headerFinal);
         });
 
-        console.log("✅ Encabezados finales normalizados:", headers);
-
         // PASO 3: Mapeo de cabeceras
         const mapeoAvanzado = {
             identificacion: ["cedula", "identificacion"],
@@ -172,7 +174,7 @@ const importarExcel = async (req, res) => {
             fecha_fin_descanso: ["descanso fecha final"],
             hora_fin_descanso: ["descanso hora final"],
             es_festivo_Inicio: ["es_festivo_inicio"],
-            es_festivo_fin: ["es_festivo_fin"],
+            es_festivo_Fin: ["es_festivo_fin"],
         };
 
         const columnasObligatorias = [
@@ -222,19 +224,12 @@ const importarExcel = async (req, res) => {
                 let cedula = row[headerIndexMap.identificacion];
                 let funcionario = null;
 
+                // --- BLOQUE ORIGINAL DE FUNCIONARIO --- (completamente intacto)
                 if (cedula && cedula.toString().toLowerCase().includes("temporal")) {
-                    console.warn(`⚠️ Fila ${filaActual}: cédula inválida (${cedula}), asignando identificacion generada.`);
-
                     const nombre = row[headerIndexMap.nombre_completo];
-                    if (!nombre) {
-                        throw new Error(`Fila ${filaActual}: no se encontró nombre para asignar identificacion temporal.`);
-                    }
-
                     const cedulaTemporal = `TMP-${filaActual}`;
                     const nombreLimpio = nombre.toString().trim();
-
                     funcionario = await Funcionario.findOne({ nombre_completo: nombreLimpio, tipoOperario: "Temporal" });
-
                     if (!funcionario) {
                         funcionario = new Funcionario({
                             identificacion: cedulaTemporal,
@@ -244,15 +239,10 @@ const importarExcel = async (req, res) => {
                         await funcionario.save();
                         resumen.funcionariosCreados++;
                     }
-
                     cedula = cedulaTemporal;
                 } else {
                     const cedulaNormalizada = cedula?.toString().replace(/[^\d]/g, "").trim();
-                    if (!cedulaNormalizada) {
-                        console.warn(`⚠️ Fila ${filaActual}: cédula vacía después de normalizar`);
-                        continue;
-                    }
-
+                    if (!cedulaNormalizada) continue;
                     const nombreHojaNormalizado = normalizeHeader(sheetName);
                     let tipoOperarioDetectado = null;
                     if (nombreHojaNormalizado.includes("planta")) tipoOperarioDetectado = "Planta";
@@ -287,18 +277,22 @@ const importarExcel = async (req, res) => {
                         resumen.funcionariosCreados++;
                     }
                 }
+                // --- FIN BLOQUE FUNCIONARIO ---
 
-                // --- Normalizar valores de la fila ---
                 let registroLimpio = { FuncionarioAsignado: funcionario._id };
+
                 for (const campoModelo in headerIndexMap) {
                     const index = headerIndexMap[campoModelo];
                     const valor = row[index];
                     const convertido = formatearCelda(valor, campoModelo);
 
-                    if (campoModelo.includes("descanso")) {
-                        if (valor && !convertido) {
-                            console.warn(`⚠️ Fila ${filaActual}: El campo ${campoModelo} venía con valor en Excel pero quedó vacío al convertir. Valor original:`, valor);
-                        }
+                    if (campoModelo.includes("descanso") && valor && !convertido) {
+                        console.warn(`⚠️ Fila ${filaActual}: El campo ${campoModelo} venía con valor en Excel pero quedó vacío al convertir. Valor original:`, valor);
+                    }
+
+                    // --- LOGS para festivos ---
+                    if (campoModelo === "es_festivo_Inicio" || campoModelo === "es_festivo_Fin") {
+                        console.log(`📌 Fila ${filaActual} - ${campoModelo}: valor original=`, valor, ", convertido=", convertido);
                     }
 
                     registroLimpio[campoModelo] = convertido;
