@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const { validarJWT } = require('../middlewares/validar-jwt');
 const { crearExtras, eliminarExtras, updateExtra,listarExtras,
     listarExtrasPorFechas,listarExtrasPorIdentificacion,exportarExtrasExcel } = require('../controllers/Extras');
-const { validarJWT } = require('../middlewares/validar-jwt');
 
 /**
  * @swagger

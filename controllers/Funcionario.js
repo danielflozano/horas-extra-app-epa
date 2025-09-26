@@ -36,7 +36,7 @@ const crearFuncionario = async (req, res) => {
 
         await nuevoFuncionario.save();
 
-        res.status(201).json({ success: true, data: nuevoFuncionario });
+        res.status(201).json({ success: true, data: nuevoFuncionario, message:'Funcionario creado con exito' }); // TODO: Debo dejar esto !!!
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Error creando el funcionario' });

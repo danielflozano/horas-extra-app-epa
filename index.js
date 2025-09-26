@@ -36,7 +36,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/extras', require('./routes/extras'));
 app.use('/api/funcionario', require('./routes/funcionario'));
 app.use('/api/cargos', require('./routes/cargo'));
-app.use('/api/reporte', require('./routes/reporte'))
+app.use('/api/reporte', require('./routes/reporte'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // TODO: CRUD: eventos
@@ -57,4 +57,4 @@ app.listen( process.env.PORT, () => {
   console.log(`✅ Servidor Express escuchando en http://localhost:${PORT}`);
   const ip = getLocalIP();
   console.log(`📚 Swagger disponible en: http://${ip}:${PORT}/api-docs`);
-} );
+});

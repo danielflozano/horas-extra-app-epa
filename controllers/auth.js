@@ -1,6 +1,5 @@
 const { response } = require('express');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid'); 
 const Usuario = require('../models/Usuario');
 const RefreshToken = require('../models/refreshToken'); 
 const nodemailer = require('nodemailer');
@@ -90,7 +89,7 @@ const loginUsuario = async (req, res = response) => {
     res.status(200).json({
       ok: true,
       token,
-      message: 'Sesion iniciada exitosamente',
+      msg: 'Sesion iniciada exitosamente', // TODO: Debo dejar esto !!!
       user: {
         uid: usuario.id,
         name: usuario.name,

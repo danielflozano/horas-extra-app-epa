@@ -54,7 +54,7 @@ const router = Router();
  *         description: Acceso denegado (no es SuperAdmin).
  */
 router.post(
-  '/new',
+  '/newUser', // TODO: Debo dejar esto !!!
   [
     validarJWT,
     SuperAdmin,

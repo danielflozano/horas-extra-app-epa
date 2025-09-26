@@ -316,7 +316,7 @@ const eliminarExtras = async (req, res) => {
     try {
         const { id } = req.params;
         const extra = await Extras.findByIdAndDelete(id);
-        if (!extra) return res.status(404).json({ success: false, message: 'No encontrado' });
+        if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado' }); // TODO: Debo dejar esto !!!
         res.status(200).json({ success: true, message: 'Registro eliminado', data: extra });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
