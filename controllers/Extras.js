@@ -86,26 +86,48 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
 
 const crearExtras = async (req, res) => {
   try {
-    const data = req.body;
+    let data = req.body;
 
+    // 1. Validar los datos de entrada (formato, lógica, solapamientos)
     const validacion = await validarTurnoYHoras(data);
     if (!validacion.success) {
-      return res.status(validacion.status).json({ success: false, message: validacion.message });
+      return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
+    }
+    if (validacion.dataAjustada) {
+        data = validacion.dataAjustada;
     }
 
-    const calculos = calcularHorasExtras(data);
-    if (!calculos.success) return res.status(400).json(calculos);
+    // 2. Calcular el desglose de horas
+    const calculos = await calcularHorasExtras(data);
+    if (!calculos.success) {
+      return res.status(400).json({ success: false, message: calculos.message });
+    }
 
-    const nuevaExtra = new Extras({ ...data, ...calculos, observaciones: data.observaciones || "" });
+    if (calculos.hora_fin_trabajo_ajustada) {
+        data.hora_fin_trabajo = calculos.hora_fin_trabajo_ajustada;
+        data.fecha_fin_trabajo = calculos.fecha_fin_trabajo_ajustada;
+    }
+
+    const nuevaExtra = new Extras({ 
+        ...data, 
+        ...calculos, 
+        observaciones: data.observaciones || "" 
+    });
+    
     await nuevaExtra.save();
-    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo");
+    
+    // Poblar los datos del funcionario para la respuesta
+    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo tipoOperario");
 
+    // 5. Preparar y enviar la respuesta final
     const respuesta = {
       success: true,
       message: 'Registro de horas extras creado exitosamente.',
       data: nuevaExtra,
     };
-    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+    if (validacion.avisoCambio) {
+      respuesta.aviso = validacion.avisoCambio;
+    }
 
     res.status(201).json(respuesta);
 
@@ -115,37 +137,51 @@ const crearExtras = async (req, res) => {
   }
 };
 
-
 const updateExtra = async (req, res) => {
   try {
     const { id } = req.params;
     const nuevosDatos = req.body;
 
-    const extra = await Extras.findById(id);
-    if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
-
-    const datosParaValidar = { ...extra.toObject(), ...nuevosDatos };
-    const validacion = await validarTurnoYHoras(datosParaValidar, id);
-    if (!validacion.success) return res.status(validacion.status).json({ success: false, message: validacion.message });
-
-    Object.assign(extra, nuevosDatos);
-
-    const camposDeCalculo = ['fecha_inicio_trabajo','hora_inicio_trabajo','fecha_fin_trabajo','hora_fin_trabajo','fecha_inicio_descanso','hora_inicio_descanso','fecha_fin_descanso','hora_fin_descanso'];
-    const necesitaRecalcular = camposDeCalculo.some(campo => nuevosDatos[campo] !== undefined);
-    if (necesitaRecalcular) {
-      const calculos = calcularHorasExtras(extra.toObject());
-      Object.assign(extra, calculos);
+    const extraOriginal = await Extras.findById(id);
+    if (!extraOriginal) {
+      return res.status(404).json({ success: false, message: 'Registro no encontrado.' });
     }
 
-    await extra.save();
-    await extra.populate("FuncionarioAsignado", "nombre_completo");
+    // 1. Crear un objeto con los datos finales (originales + nuevos)
+    // Se asegura de que todos los campos necesarios para la validación y el cálculo estén presentes.
+    const datosFinales = {
+        ...extraOriginal.toObject(),
+        ...nuevosDatos
+    };
+
+    const validacion = await validarTurnoYHoras(datosFinales, id);
+    if (!validacion.success) {
+      return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
+    }
+
+    // 3. Recalcular las horas con los datos ya validados
+    const calculos = calcularHorasExtras(datosFinales);
+    if (!calculos.success) {
+      return res.status(400).json({ success: false, message: calculos.message });
+    }
+    
+    // 4. Actualizar el documento original con los nuevos datos y los nuevos cálculos
+    Object.assign(extraOriginal, nuevosDatos, calculos);
+
+    // 5. Guardar el documento actualizado en la base de datos
+    await extraOriginal.save();
+    
+    // Opcional: Volver a popular los datos del funcionario para la respuesta
+    const extraActualizado = await Extras.findById(extraOriginal._id).populate("FuncionarioAsignado", "nombre_completo");
 
     const respuesta = {
       success: true,
       message: 'Registro actualizado correctamente.',
-      data: extra
+      data: extraActualizado,
     };
-    if (validacion.avisoCambio) respuesta.aviso = validacion.avisoCambio;
+    if (validacion.avisoCambio) {
+        respuesta.aviso = validacion.avisoCambio;
+    }
 
     res.status(200).json(respuesta);
 
@@ -155,12 +191,14 @@ const updateExtra = async (req, res) => {
   }
 };
 
-
 const exportarExtrasExcel = async (req, res) => {
   try {
     const { identificacion, fechaInicio, fechaFin } = req.query;
     let query = {};
     let funcionarioFiltrado = null;
+
+    console.log("Valor de fechaInicio recibido:",  req.query);
+  
 
     if (identificacion) {
       const func = await Funcionario.findOne({ identificacion });
@@ -171,12 +209,17 @@ const exportarExtrasExcel = async (req, res) => {
       funcionarioFiltrado = func;
     }
 
-    if (fechaInicio && fechaFin) {
-      const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
-      const fin = moment(fechaFin, "YYYY-MM-DD").endOf('day').toDate();
-      query.fecha_inicio_trabajo = { $lte: fin };
-      query.fecha_fin_trabajo = { $gte: inicio };
-    }
+   if (fechaInicio && fechaFin) {
+  const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
+  const fin = moment(fechaFin, "YYYY-MM-DD").endOf('day').toDate();
+  
+  query.fecha_inicio_trabajo = { $lte: fin };
+  query.fecha_fin_trabajo = { $gte: inicio };
+
+   console.log("Las fechas se procesaron correctamente:", inicio, fin);
+}
+ 
+
 
     const extras = await Extras.find(query)
       .populate({ path: 'FuncionarioAsignado', select: 'nombre_completo identificacion Cargo', populate: { path: 'Cargo', select: 'name' } })
@@ -190,9 +233,6 @@ const exportarExtrasExcel = async (req, res) => {
     // 🔹 Función para limpiar valores nulos
     const safeValue = (val) => (val === null || val === undefined ? '' : val);
 
-    // --- 1. DISEÑO DE ENCABEZADO FINAL ---
-
-    // Fila 1: Logo y Fecha de Generación
     worksheet.getRow(1).height = 45;
     const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
     if (fs.existsSync(logoPath)) {
@@ -304,6 +344,7 @@ const exportarExtrasExcel = async (req, res) => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     res.send(buffer);
+  
 
   } catch (error) {
     console.error("Error al generar Excel:", error);
@@ -329,6 +370,8 @@ const listarExtras = async (req, res) => {
             .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" }})
             .sort({ fecha_inicio_trabajo: -1 });
         res.status(200).json({ success: true, data: extras });
+        console.log(extras);
+        
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -391,5 +434,6 @@ module.exports = {
     listarExtras,
     listarExtrasPorIdentificacion,
     listarExtrasPorFechas,
-    exportarExtrasExcel
+    exportarExtrasExcel,
+    validarTurnoYHoras
 };

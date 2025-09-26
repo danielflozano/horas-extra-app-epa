@@ -95,7 +95,7 @@ const { validarJWT } = require('../middlewares/validar-jwt');
  *       400:
  *         description: Datos inválidos
  */
-router.post('/crear', validarJWT, crearReporte);
+router.post('/crear', crearReporte);
 
 
 /**
