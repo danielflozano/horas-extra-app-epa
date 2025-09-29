@@ -37,14 +37,14 @@ const formatearCelda = (valor, campo) => {
         return null;
     }
 
-  if (campo.toLowerCase().startsWith("es_festivo")) {
-    if (typeof valor === "boolean") return valor;
-    if (typeof valor === "number") return valor === 1;
-    const str = valor.toString().replace(/\s+/g, "").toLowerCase(); 
-    if (["true","1","si","sí"].includes(str)) return true;
-    if (["false","0","no"].includes(str)) return false;
-    return false;
-}
+    if (campo.toLowerCase().startsWith("es_festivo")) {
+        if (typeof valor === "boolean") return valor;
+        if (typeof valor === "number") return valor === 1;
+        const str = valor.toString().replace(/\s+/g, "").toLowerCase();
+        if (["true", "1", "si", "sí"].includes(str)) return true;
+        if (["false", "0", "no"].includes(str)) return false;
+        return false;
+    }
     // Resto del formateo existente...
     if (valor instanceof Date) {
         if (campo.startsWith("fecha_")) return moment(valor).format("YYYY-MM-DD");
@@ -55,17 +55,17 @@ const formatearCelda = (valor, campo) => {
         const minutos = Math.round(valor * 24 * 60);
         const horas = Math.floor(minutos / 60);
         const mins = minutos % 60;
-        return `${String(horas).padStart(2,"0")}:${String(mins).padStart(2,"0")}`;
+        return `${String(horas).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
     }
 
     if (typeof valor === "string") {
         const str = valor.trim();
         if (campo.startsWith("fecha_")) {
-            const fecha = moment(str, ["DD/MM/YYYY","YYYY-MM-DD","MM/DD/YYYY"], true);
+            const fecha = moment(str, ["DD/MM/YYYY", "YYYY-MM-DD", "MM/DD/YYYY"], true);
             return fecha.isValid() ? fecha.format("YYYY-MM-DD") : null;
         }
         if (campo.startsWith("hora_")) {
-            const hora = moment(str, ["HH:mm","H:mm","HH:mm:ss"], true);
+            const hora = moment(str, ["HH:mm", "H:mm", "HH:mm:ss"], true);
             return hora.isValid() ? hora.format("HH:mm") : null;
         }
     }
@@ -303,6 +303,14 @@ const importarExcel = async (req, res) => {
 
                 const calculos = await calcularHorasExtras(registroLimpio);
                 if (!calculos.success) throw new Error(calculos.message || "Error en cálculo.");
+
+                // 🔧 Ajustar hora/fecha fin si se devolvieron ajustes desde calcularHorasExtras
+                if (calculos.hora_fin_trabajo_ajustada) {
+                    registroLimpio.hora_fin_trabajo = calculos.hora_fin_trabajo_ajustada;
+                }
+                if (calculos.fecha_fin_trabajo_ajustada) {
+                    registroLimpio.fecha_fin_trabajo = calculos.fecha_fin_trabajo_ajustada;
+                }
 
                 const datosParaGuardar = { ...registroLimpio, ...calculos };
                 const nuevaExtra = new Extras(datosParaGuardar);
