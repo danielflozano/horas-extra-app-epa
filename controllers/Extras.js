@@ -81,7 +81,8 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
     }
   }
 
-  return { success: true, avisoCambio };
+  return { success: true, avisoCambio, dataAjustada: data };
+
 }
 
 const crearExtras = async (req, res) => {

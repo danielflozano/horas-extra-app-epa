@@ -191,27 +191,29 @@ async function calcularHorasExtras(data) {
     // AJUSTE DE HORAS FALTANTES
     let horaFinAjustada = null;
     let fechaFinAjustada = null;
-    const limiteParaCompletar = (tipo === 'planta') ? 480 : 440;
+    limiteParaCompletar = (tipo === 'planta') ? 480 : 440;
+    limiteParaCompletar = (tipo === 'planta') ? 480 : 440;
+   const ultimoMinuto = finTotal.clone().subtract(1, 'minute');
+    const diaSemanaFin = ultimoMinuto.isoWeekday(); // 1 = lunes ... 7 = domingo
+    const diaSemanaInicio = inicioTotal.isoWeekday();
+    const esFestivoODominical = diaSemanaFin === 7 || es_festivo_Fin === true || es_festivo_Inicio === true || diaSemanaInicio==7;
 
-    if (totalMinutosTrabajados > 0 && totalMinutosTrabajados < limiteParaCompletar) {
+if (totalMinutosTrabajados > 0 && totalMinutosTrabajados < limiteParaCompletar) {
+    if (!esFestivoODominical) {
+        // ✅ De lunes a sábado → sí se completa
         const minutosFaltantes = limiteParaCompletar - totalMinutosTrabajados;
         console.log(`⚠️ Faltan ${minutosFaltantes} minutos para completar jornada`);
-        
-        try {
-          const ultimoMinuto = finTotal.clone().subtract(1, 'minute');
-          const esNocturno = ultimoMinuto.hour() >= 18 || ultimoMinuto.hour() < 6;
-          const esFestivoODominical = ultimoMinuto.isoWeekday() === 7 || 
-                                     (ultimoMinuto.isSame(moment.utc(finTotal.clone().subtract(1, 'minute')), 'day') && es_festivo_Fin);
 
-          if (esFestivoODominical) {
-              esNocturno ? (horas.HNF += minutosFaltantes) : (horas.HDF += minutosFaltantes);
-          } else {
-              esNocturno ? (horas.HNO += minutosFaltantes) : (horas.HDO += minutosFaltantes);
-          }
-          if (esNocturno && !esFestivoODominical) {
+        try {
+          const esNocturno = ultimoMinuto.hour() >= 18 || ultimoMinuto.hour() < 6;
+
+          if (esNocturno) {
+              horas.HNO += minutosFaltantes;
               horas.RNO += minutosFaltantes;
+          } else {
+              horas.HDO += minutosFaltantes;
           }
-          
+
           let finTotalAjustado = finTotal.clone().add(minutosFaltantes, 'minutes');
           horaFinAjustada = finTotalAjustado.format('HH:mm');
           fechaFinAjustada = finTotalAjustado.format('YYYY-MM-DD');
@@ -219,7 +221,12 @@ async function calcularHorasExtras(data) {
         } catch (ajusteError) {
           console.warn('⚠️ Error en ajuste de horas, continuando sin ajuste:', ajusteError.message);
         }
+    } else {
+        // 🚫 Domingo o festivo → nunca se completa
+        console.log("📅 Domingo o festivo: no se completan horas faltantes");
     }
+}
+
 
     // FUNCIÓN HELPER SEGURA
     const aHHMM = (min) => {
