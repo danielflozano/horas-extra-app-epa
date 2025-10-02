@@ -6,7 +6,7 @@ const moment = require('moment');
 require('moment/locale/es');
 const fs = require('fs');
 const path = require('path');
-const {calcularHorasExtras} = require('../helpers/CalculoHoras');
+const { calcularHorasExtras } = require('../helpers/CalculoHoras');
 
 // --- Funciones de utilidad (sin cambios) ---
 function convertirHorasAMinutos(hora) {
@@ -26,9 +26,12 @@ function calcularPeriodo(fechaInicio, fechaFin) {
   if (dias <= 31) return 'Mensual';
   return 'Anual';
 }
+
 async function crearReporte(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
+  
+
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
     }
@@ -39,7 +42,7 @@ async function crearReporte(req, res) {
     if (!inicioReporte.isValid() || !finReporte.isValid()) {
       return res.status(400).json({ mensaje: "Formato de fecha inválido. Use YYYY-MM-DD." });
     }
-    
+
     const periodo = calcularPeriodo(inicioReporte.toDate(), finReporte.toDate());
 
     // Limpiar reportes existentes
@@ -50,10 +53,15 @@ async function crearReporte(req, res) {
     // Obtener funcionarios
     const filtroFuncionarios = {};
     if (tipoOperario) filtroFuncionarios.tipoOperario = tipoOperario;
+
+    // Excluir inactivos
+    filtroFuncionarios.estado = { $ne: 'Inactivo' };
+
     const todosLosFuncionarios = await Funcionario.find(filtroFuncionarios);
     if (todosLosFuncionarios.length === 0) {
-      return res.json({ success: true, data: [], mensaje: "No se encontraron funcionarios." });
+      return res.json({ success: true, data: [], mensaje: "No se encontraron funcionarios activos." });
     }
+
 
     // Inicializar mapa de reportes
     const reportesMap = new Map();
@@ -61,19 +69,20 @@ async function crearReporte(req, res) {
       reportesMap.set(f._id.toString(), {
         identificacion_Funcionario: f.identificacion_completa || f.identificacion || "",
         nombre_Funcionario: f.nombre_completo || "",
+        estado: f.estado || "",
         tipoOperario: f.tipoOperario || "",
         HEDO: 0, HENO: 0, HEDF: 0, HENF: 0, HDF: 0, HNF: 0, RNO: 0
       });
     });
 
     const idsDeFuncionarios = todosLosFuncionarios.map(f => f._id);
-    
+
     // Buscar turnos en el rango de fechas
     const filtroHorasExtras = {
       FuncionarioAsignado: { $in: idsDeFuncionarios },
       fecha_inicio_trabajo: { $gte: inicioReporte.toDate(), $lte: finReporte.toDate() }
     };
-    
+
     const extrasEncontradas = await HorasExtras.find(filtroHorasExtras);
 
     // Sumar las horas extras directamente
@@ -93,29 +102,29 @@ async function crearReporte(req, res) {
     // Generar reportes
     const reportesAGuardar = [];
     for (const r of reportesMap.values()) {
-        const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
-        reportesAGuardar.push({
-            identificacion_Funcionario: r.identificacion_Funcionario,
-            nombre_Funcionario: r.nombre_Funcionario,
-            fechaInicioReporte: inicioReporte.toDate(),
-            fechaFinReporte: finReporte.toDate(),
-            tipoOperario: r.tipoOperario,
-            periodo,
-            HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
-            HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
-            HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
-            RNO_HORA: minutosAHHMM(r.RNO),
-            HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)),
-            HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
-            HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)),
-            HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
-            HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)),
-            HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
-            RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
-            totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
-        });
+      const totalExtrasMin = r.HEDO + r.HENO + r.HEDF + r.HENF;
+      reportesAGuardar.push({
+        identificacion_Funcionario: r.identificacion_Funcionario,
+        nombre_Funcionario: r.nombre_Funcionario,
+        fechaInicioReporte: inicioReporte.toDate(),
+        fechaFinReporte: finReporte.toDate(),
+        tipoOperario: r.tipoOperario,
+        periodo,
+        HEDO_HORA: minutosAHHMM(r.HEDO), HENO_HORA: minutosAHHMM(r.HENO),
+        HEDF_HORA: minutosAHHMM(r.HEDF), HENF_HORA: minutosAHHMM(r.HENF),
+        HDF_HORA: minutosAHHMM(r.HDF), HNF_HORA: minutosAHHMM(r.HNF),
+        RNO_HORA: minutosAHHMM(r.RNO),
+        HEDO_DEC: parseFloat((r.HEDO / 60).toFixed(2)),
+        HENO_DEC: parseFloat((r.HENO / 60).toFixed(2)),
+        HEDF_DEC: parseFloat((r.HEDF / 60).toFixed(2)),
+        HENF_DEC: parseFloat((r.HENF / 60).toFixed(2)),
+        HDF_DEC: parseFloat((r.HDF / 60).toFixed(2)),
+        HNF_DEC: parseFloat((r.HNF / 60).toFixed(2)),
+        RNO_DEC: parseFloat((r.RNO / 60).toFixed(2)),
+        totalExtras_DEC: parseFloat((totalExtrasMin / 60).toFixed(2)),
+      });
     }
-    
+
     if (reportesAGuardar.length > 0) {
       await Reporte.insertMany(reportesAGuardar);
     }
@@ -142,13 +151,16 @@ async function exportarReporteExcel(req, res) {
     if (!inicioReporte.isValid() || !finReporte.isValid()) {
       return res.status(400).json({ mensaje: "Formato de fecha inválido. Use YYYY-MM-DD." });
     }
-    
-    // --- Filtrar funcionarios según tipo ---
+
     const filtroFuncionarios = {};
     if (tipoOperario) filtroFuncionarios.tipoOperario = tipoOperario;
+
+    // Excluir inactivos
+    filtroFuncionarios.estado = { $ne: 'Inactivo' };
+
     const todosLosFuncionarios = await Funcionario.find(filtroFuncionarios);
     if (todosLosFuncionarios.length === 0) {
-      return res.status(404).json({ mensaje: "No se encontraron funcionarios." });
+      return res.json({ success: true, data: [], mensaje: "No se encontraron funcionarios activos." });
     }
 
     const reportesMap = new Map();
@@ -166,7 +178,7 @@ async function exportarReporteExcel(req, res) {
       FuncionarioAsignado: { $in: idsDeFuncionarios },
       fecha_inicio_trabajo: { $gte: inicioReporte.toDate(), $lte: finReporte.toDate() }
     };
-    
+
     const extrasEncontradas = await HorasExtras.find(filtroHorasExtras);
 
     // CORRECCIÓN: Sumar las horas extras directamente (igual que en crearReporte)
@@ -200,10 +212,10 @@ async function exportarReporteExcel(req, res) {
     worksheet.getRow(1).height = 45;
     const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
     if (fs.existsSync(logoPath)) {
-        const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
-        worksheet.addImage(logoId, { tl: { col: 0.5, row: 0.2 }, ext: { width: 140, height: 60 } });
+      const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
+      worksheet.addImage(logoId, { tl: { col: 0.5, row: 0.2 }, ext: { width: 140, height: 60 } });
     }
-    
+
     worksheet.mergeCells('D1:N1');
     const titleCell = worksheet.getCell('D1');
     titleCell.value = 'Reporte Horas Extras';
@@ -238,13 +250,13 @@ async function exportarReporteExcel(req, res) {
     worksheet.getCell('G4').value = "Tiempo Suplementario (HH:MM)";
     worksheet.getCell('J4').value = "Conversion Decimal";
     worksheet.getCell('Q4').value = "Total Extras (DEC)";
-    
+
     headerRow5.values = [
-        "", "", 
-        "HEDO", "HENO", "HEDF", "HENF",
-        "HDF", "HNF", "RNO",
-        "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO", 
-        "" 
+      "", "",
+      "HEDO", "HENO", "HEDF", "HENF",
+      "HDF", "HNF", "RNO",
+      "HEDO", "HENO", "HEDF", "HENF", "HDF", "HNF", "RNO",
+      ""
     ];
 
     worksheet.mergeCells('A4:A5'); worksheet.mergeCells('B4:B5');
@@ -253,12 +265,12 @@ async function exportarReporteExcel(req, res) {
 
     const bordeBlanco = { style: 'thin', color: { argb: '#FFFFFF' } };
     [headerRow4, headerRow5].forEach(row => {
-        row.eachCell({ includeEmpty: true }, cell => {
-            cell.font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.border = { top: bordeBlanco, left: bordeBlanco, bottom: bordeBlanco, right: bordeBlanco };
-        });
+      row.eachCell({ includeEmpty: true }, cell => {
+        cell.font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = { top: bordeBlanco, left: bordeBlanco, bottom: bordeBlanco, right: bordeBlanco };
+      });
     });
 
     // --- 3. Datos de la Tabla ---
@@ -274,28 +286,28 @@ async function exportarReporteExcel(req, res) {
         parseFloat((r.RNO / 60).toFixed(2)),
         parseFloat((totalExtrasMin / 60).toFixed(2)),
       ]);
-      
+
       const bordeNegro = { style: 'thin', color: { argb: 'FF000000' } };
       dataRow.eachCell((cell, colNumber) => {
         cell.border = { top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro };
         if (colNumber <= 2) {
-            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+          cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
         } else {
-            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
         }
         if (index % 2 !== 0) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
         }
       });
     });
 
     // --- 4. Anchos de Columna y Vista Congelada ---
     worksheet.columns = [
-      { width: 18 }, { width: 40 }, 
-      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, 
-      { width: 12 }, { width: 12 }, { width: 12 }, 
-      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 }, 
-      { width: 12 }, { width: 12 }, { width: 12 }, 
+      { width: 18 }, { width: 40 },
+      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
+      { width: 12 }, { width: 12 }, { width: 12 },
+      { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
+      { width: 12 }, { width: 12 }, { width: 12 },
       { width: 18 }
     ];
 

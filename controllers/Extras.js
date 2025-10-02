@@ -12,10 +12,19 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
   const camposObligatorios = ['FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo'];
   for (const campo of camposObligatorios) {
     if (!data[campo]) return { success: false, status: 400, message: `El campo obligatorio '${campo}' es requerido.` };
-  }
   if (!mongoose.Types.ObjectId.isValid(data.FuncionarioAsignado)) {
-    return { success: false, status: 400, message: 'El ID del funcionario asignado no es válido.' };
-  }
+  return { success: false, status: 400, message: 'El ID del funcionario asignado no es válido.' };
+}
+
+// Validar estado directamente desde BD
+const funcionario = await Funcionario.findById(data.FuncionarioAsignado).select("estado");
+if (!funcionario) {
+  return { success: false, status: 404, message: 'El funcionario asignado no existe.' };
+}
+if (funcionario.estado === "Inactivo") {
+  return { success: false, status: 400, message: 'No se pueden registrar horas extras para un funcionario inactivo.' };
+}
+
 
   const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   const camposDeHora = ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso'];
@@ -24,6 +33,7 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
       return { success: false, status: 400, message: `El formato de hora para '${campo}' debe ser HH:MM (ejemplo: 08:30).` };
     }
   }
+}
 
   let inicioNuevo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
   let finNuevo = moment(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}`);
@@ -89,7 +99,8 @@ const crearExtras = async (req, res) => {
   try {
     let data = req.body;
 
-    // 1. Validar los datos de entrada (formato, lógica, solapamientos)
+    console.log("Datos recibidos para crearExtras:", data);
+    
     const validacion = await validarTurnoYHoras(data);
     if (!validacion.success) {
       return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
@@ -118,7 +129,7 @@ const crearExtras = async (req, res) => {
     await nuevaExtra.save();
     
     // Poblar los datos del funcionario para la respuesta
-    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo tipoOperario");
+    await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo tipoOperario estado");
 
     // 5. Preparar y enviar la respuesta final
     const respuesta = {
@@ -212,7 +223,7 @@ const exportarExtrasExcel = async (req, res) => {
 
    if (fechaInicio && fechaFin) {
   const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
-  const fin = moment(fechaFin, "YYYY-MM-DD").endOf('day').toDate();
+  const fin = moment(fechaFin, "YsYYY-MM-DD").endOf('day').toDate();
   
   query.fecha_inicio_trabajo = { $lte: fin };
   query.fecha_fin_trabajo = { $gte: inicio };

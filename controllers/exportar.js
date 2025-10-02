@@ -324,7 +324,29 @@ const importarExcel = async (req, res) => {
             }
         }
 
-        return res.status(200).json({ message: "Importación finalizada.", resumen });
+        // Después del FOR principal de filas
+        let mensajeGeneral = "✅ Importación completada sin errores.";
+
+        // Caso 1: errores por horas extras repetidas
+        if (resumen.errores.some(e => e.includes("Ya existe un registro de horas"))) {
+            mensajeGeneral = "⚠️ Ya existen registros de horas extras en este mes para este tipo de operario.";
+        }
+        // Caso 2: otros errores (formato, datos incompletos, etc.)
+        else if (resumen.errores.length > 0) {
+            mensajeGeneral = "⚠️ Algunos registros no se pudieron importar. Revisa el archivo.";
+        }
+
+        // 👉 Respuesta final
+        return res.status(200).json({
+            success: resumen.registrosGuardados > 0,
+            message: mensajeGeneral,  
+            registrosGuardados: resumen.registrosGuardados,
+            registrosFallidos: resumen.registrosFallidos,
+            funcionariosCreados: resumen.funcionariosCreados,
+            cargosCreados: resumen.cargosCreados,
+            errores: resumen.errores   // opcional, solo para debug
+        });
+
     } catch (error) {
         console.error("❌ Error al procesar Excel:", error);
         return res.status(500).json({ error: "Error interno al procesar el archivo", details: error.message });
