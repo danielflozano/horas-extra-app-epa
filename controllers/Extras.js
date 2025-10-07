@@ -12,28 +12,28 @@ async function validarTurnoYHoras(data, idParaExcluir = null) {
   const camposObligatorios = ['FuncionarioAsignado', 'fecha_inicio_trabajo', 'hora_inicio_trabajo', 'fecha_fin_trabajo', 'hora_fin_trabajo'];
   for (const campo of camposObligatorios) {
     if (!data[campo]) return { success: false, status: 400, message: `El campo obligatorio '${campo}' es requerido.` };
-  if (!mongoose.Types.ObjectId.isValid(data.FuncionarioAsignado)) {
-  return { success: false, status: 400, message: 'El ID del funcionario asignado no es válido.' };
-}
+    if (!mongoose.Types.ObjectId.isValid(data.FuncionarioAsignado)) {
+      return { success: false, status: 400, message: 'El ID del funcionario asignado no es válido.' };
+    }
 
-// Validar estado directamente desde BD
-const funcionario = await Funcionario.findById(data.FuncionarioAsignado).select("estado");
-if (!funcionario) {
-  return { success: false, status: 404, message: 'El funcionario asignado no existe.' };
-}
-if (funcionario.estado === "Inactivo") {
-  return { success: false, status: 400, message: 'No se pueden registrar horas extras para un funcionario inactivo.' };
-}
+    // Validar estado directamente desde BD
+    const funcionario = await Funcionario.findById(data.FuncionarioAsignado).select("estado");
+    if (!funcionario) {
+      return { success: false, status: 404, message: 'El funcionario asignado no existe.' };
+    }
+    if (funcionario.estado === "Inactivo") {
+      return { success: false, status: 400, message: 'No se pueden registrar horas extras para un funcionario inactivo.' };
+    }
 
 
-  const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-  const camposDeHora = ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso'];
-  for (const campo of camposDeHora) {
-    if (data[campo] && !horaRegex.test(data[campo])) {
-      return { success: false, status: 400, message: `El formato de hora para '${campo}' debe ser HH:MM (ejemplo: 08:30).` };
+    const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    const camposDeHora = ['hora_inicio_trabajo', 'hora_fin_trabajo', 'hora_inicio_descanso', 'hora_fin_descanso'];
+    for (const campo of camposDeHora) {
+      if (data[campo] && !horaRegex.test(data[campo])) {
+        return { success: false, status: 400, message: `El formato de hora para '${campo}' debe ser HH:MM (ejemplo: 08:30).` };
+      }
     }
   }
-}
 
   let inicioNuevo = moment(`${data.fecha_inicio_trabajo}T${data.hora_inicio_trabajo}`);
   let finNuevo = moment(`${data.fecha_fin_trabajo}T${data.hora_fin_trabajo}`);
@@ -100,13 +100,13 @@ const crearExtras = async (req, res) => {
     let data = req.body;
 
     console.log("Datos recibidos para crearExtras:", data);
-    
+
     const validacion = await validarTurnoYHoras(data);
     if (!validacion.success) {
       return res.status(validacion.status || 400).json({ success: false, message: validacion.message });
     }
     if (validacion.dataAjustada) {
-        data = validacion.dataAjustada;
+      data = validacion.dataAjustada;
     }
 
     // 2. Calcular el desglose de horas
@@ -116,18 +116,18 @@ const crearExtras = async (req, res) => {
     }
 
     if (calculos.hora_fin_trabajo_ajustada) {
-        data.hora_fin_trabajo = calculos.hora_fin_trabajo_ajustada;
-        data.fecha_fin_trabajo = calculos.fecha_fin_trabajo_ajustada;
+      data.hora_fin_trabajo = calculos.hora_fin_trabajo_ajustada;
+      data.fecha_fin_trabajo = calculos.fecha_fin_trabajo_ajustada;
     }
 
-    const nuevaExtra = new Extras({ 
-        ...data, 
-        ...calculos, 
-        observaciones: data.observaciones || "" 
+    const nuevaExtra = new Extras({
+      ...data,
+      ...calculos,
+      observaciones: data.observaciones || ""
     });
-    
+
     await nuevaExtra.save();
-    
+
     // Poblar los datos del funcionario para la respuesta
     await nuevaExtra.populate("FuncionarioAsignado", "nombre_completo tipoOperario estado");
 
@@ -162,8 +162,8 @@ const updateExtra = async (req, res) => {
     // 1. Crear un objeto con los datos finales (originales + nuevos)
     // Se asegura de que todos los campos necesarios para la validación y el cálculo estén presentes.
     const datosFinales = {
-        ...extraOriginal.toObject(),
-        ...nuevosDatos
+      ...extraOriginal.toObject(),
+      ...nuevosDatos
     };
 
     const validacion = await validarTurnoYHoras(datosFinales, id);
@@ -176,13 +176,13 @@ const updateExtra = async (req, res) => {
     if (!calculos.success) {
       return res.status(400).json({ success: false, message: calculos.message });
     }
-    
+
     // 4. Actualizar el documento original con los nuevos datos y los nuevos cálculos
     Object.assign(extraOriginal, nuevosDatos, calculos);
 
     // 5. Guardar el documento actualizado en la base de datos
     await extraOriginal.save();
-    
+
     // Opcional: Volver a popular los datos del funcionario para la respuesta
     const extraActualizado = await Extras.findById(extraOriginal._id).populate("FuncionarioAsignado", "nombre_completo");
 
@@ -192,7 +192,7 @@ const updateExtra = async (req, res) => {
       data: extraActualizado,
     };
     if (validacion.avisoCambio) {
-        respuesta.aviso = validacion.avisoCambio;
+      respuesta.aviso = validacion.avisoCambio;
     }
 
     res.status(200).json(respuesta);
@@ -209,8 +209,8 @@ const exportarExtrasExcel = async (req, res) => {
     let query = {};
     let funcionarioFiltrado = null;
 
-    console.log("Valor de fechaInicio recibido:",  req.query);
-  
+    console.log("Valor de fechaInicio recibido:", req.query);
+
 
     if (identificacion) {
       const func = await Funcionario.findOne({ identificacion });
@@ -221,16 +221,16 @@ const exportarExtrasExcel = async (req, res) => {
       funcionarioFiltrado = func;
     }
 
-   if (fechaInicio && fechaFin) {
-  const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
-  const fin = moment(fechaFin, "YsYYY-MM-DD").endOf('day').toDate();
-  
-  query.fecha_inicio_trabajo = { $lte: fin };
-  query.fecha_fin_trabajo = { $gte: inicio };
+    if (fechaInicio && fechaFin) {
+      const inicio = moment(fechaInicio, "YYYY-MM-DD").startOf('day').toDate();
+      const fin = moment(fechaFin, "YsYYY-MM-DD").endOf('day').toDate();
 
-   console.log("Las fechas se procesaron correctamente:", inicio, fin);
-}
- 
+      query.fecha_inicio_trabajo = { $lte: fin };
+      query.fecha_fin_trabajo = { $gte: inicio };
+
+      console.log("Las fechas se procesaron correctamente:", inicio, fin);
+    }
+
 
 
     const extras = await Extras.find(query)
@@ -239,7 +239,7 @@ const exportarExtrasExcel = async (req, res) => {
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Reporte de Horas', {
-        pageSetup: { paperSize: 9, orientation: 'landscape' }
+      pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 
     // 🔹 Función para limpiar valores nulos
@@ -248,13 +248,13 @@ const exportarExtrasExcel = async (req, res) => {
     worksheet.getRow(1).height = 45;
     const logoPath = path.join(__dirname, '../public/LOGOEPA.png');
     if (fs.existsSync(logoPath)) {
-        const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
-        worksheet.addImage(logoId, {
-            tl: { col: 0.5, row: 0.2 },
-            ext: { width: 250, height: 100 }
-        });
+      const logoId = workbook.addImage({ buffer: fs.readFileSync(logoPath), extension: 'png' });
+      worksheet.addImage(logoId, {
+        tl: { col: 0.5, row: 0.2 },
+        ext: { width: 250, height: 100 }
+      });
     }
-    
+
     worksheet.mergeCells('Q1:T1');
     const generatedCell = worksheet.getCell('Q1');
     generatedCell.value = `Generado:\n${moment().format('DD/MM/YYYY HH:mm')}`;
@@ -271,14 +271,14 @@ const exportarExtrasExcel = async (req, res) => {
 
     // Fila 3: Subtítulo
     let subtitulo = 'Reporte General';
-    if(funcionarioFiltrado) subtitulo = `Reporte para: ${funcionarioFiltrado.nombre_completo}`;
-    if(fechaInicio && fechaFin) subtitulo += ` (Período: ${fechaInicio} al ${fechaFin})`;
+    if (funcionarioFiltrado) subtitulo = `Reporte para: ${funcionarioFiltrado.nombre_completo}`;
+    if (fechaInicio && fechaFin) subtitulo += ` (Período: ${fechaInicio} al ${fechaFin})`;
     worksheet.mergeCells('A3:S3');
     const subtitleCell = worksheet.getCell('A3');
     subtitleCell.value = subtitulo;
     subtitleCell.font = { name: 'Calibri', size: 10, italic: true };
     subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    
+
     worksheet.getRow(4).height = 15; // fila vacía
 
     // --- 2. CABECERAS DE LA TABLA ---
@@ -310,7 +310,7 @@ const exportarExtrasExcel = async (req, res) => {
     } else {
       extras.forEach((e, index) => {
         if (!e.FuncionarioAsignado) return;
-        
+
         const dataRow = worksheet.addRow([
           safeValue(e.FuncionarioAsignado.identificacion),
           safeValue(e.FuncionarioAsignado.nombre_completo),
@@ -325,28 +325,28 @@ const exportarExtrasExcel = async (req, res) => {
         ]);
 
         dataRow.eachCell((cell, colNumber) => {
-            cell.border = {
-                top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro
-            };
-            if (colNumber <= 3) {
-                cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
-            } else {
-                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            }
-            if (index % 2 !== 0) {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
-            }
+          cell.border = {
+            top: bordeNegro, left: bordeNegro, bottom: bordeNegro, right: bordeNegro
+          };
+          if (colNumber <= 3) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          }
+          if (index % 2 !== 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+          }
         });
       });
     }
 
     // --- 4. ANCHOS DE COLUMNA Y VISTA ---
     worksheet.columns = [
-        { width: 18 }, { width: 35 }, { width: 25 }, 
-        { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 }, 
-        { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
-        { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, 
-        { width: 15 }, { width: 40 } 
+      { width: 18 }, { width: 35 }, { width: 25 },
+      { width: 15 }, { width: 12 }, { width: 15 }, { width: 12 },
+      { width: 20 }, { width: 20 }, { width: 20 }, { width: 20 },
+      { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 15 }, { width: 40 }
     ];
     worksheet.views = [{ state: 'frozen', ySplit: 5 }];
 
@@ -356,7 +356,7 @@ const exportarExtrasExcel = async (req, res) => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     res.send(buffer);
-  
+
 
   } catch (error) {
     console.error("Error al generar Excel:", error);
@@ -366,86 +366,86 @@ const exportarExtrasExcel = async (req, res) => {
 
 
 const eliminarExtras = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const extra = await Extras.findByIdAndDelete(id);
-        if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado' }); // TODO: Debo dejar esto !!!
-        res.status(200).json({ success: true, message: 'Registro eliminado', data: extra });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+  try {
+    const { id } = req.params;
+    const extra = await Extras.findByIdAndDelete(id);
+    if (!extra) return res.status(404).json({ success: false, message: 'Registro no encontrado' }); // TODO: Debo dejar esto !!!
+    res.status(200).json({ success: true, message: 'Registro eliminado', data: extra });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const listarExtras = async (req, res) => {
-    try {
-        const extras = await Extras.find()
-            .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" }})
-            .sort({ fecha_inicio_trabajo: -1 });
-        res.status(200).json({ success: true, data: extras });
-        console.log(extras);
-        
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+  try {
+    const extras = await Extras.find()
+      .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" } })
+      .sort({ fecha_inicio_trabajo: -1 });
+    res.status(200).json({ success: true, data: extras });
+    console.log(extras);
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const listarExtrasPorIdentificacion = async (req, res) => {
-    try {
-        const { identificacion } =  req.params;
-        if (!identificacion) return res.status(404).json({ success: false, message: "Falta identificación" }); // Cambie esto porque me retornaba success: true, data:[]
-        
-        const func = await Funcionario.findOne({ identificacion });
-        if (!func) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+  try {
+    const { identificacion } = req.params;
+    if (!identificacion) return res.status(404).json({ success: false, message: "Falta identificación" }); // Cambie esto porque me retornaba success: true, data:[]
 
-        const extras = await Extras.find({ FuncionarioAsignado: func._id })
-            .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" }})
-            .sort({ fecha_inicio_trabajo: -1 });
+    const func = await Funcionario.findOne({ identificacion });
+    if (!func) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
 
-        res.status(200).json({ success: true, data: extras });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    const extras = await Extras.find({ FuncionarioAsignado: func._id })
+      .populate({ path: "FuncionarioAsignado", select: "nombre_completo identificacion", populate: { path: "Cargo", select: "name" } })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    res.status(200).json({ success: true, data: extras });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const listarExtrasPorFechas = async (req, res) => {
-    try {
-        const { fechaInicio, fechaFin } = req.query;
-        if (!fechaInicio || !fechaFin) {
-            return res.status(400).json({ success: false, message: "Faltan fechas" });
-        }
-
-        const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
-        const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
-
-        const extras = await Extras.find({
-            
-            fecha_inicio_trabajo: { $lte: fin },
-            fecha_fin_trabajo: { $gte: inicio },
-        })   
-        .populate({
-            path: "FuncionarioAsignado", select: "nombre_completo identificacion",
-            populate: { path: "Cargo", select: "name" }
-        })
-        .sort({ fecha_inicio_trabajo: -1 });
-        
-        console.log(`Buscando entre ${inicio.toISOString()} y ${fin.toISOString()}`);
-        console.log(`Se encontraron ${extras.length} registros.`);
-        
-        res.status(200).json({ success: true, data: extras });
-        console.log(`Registros enviados al cliente: ${extras.length}`);
-        
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ success: false, message: "Faltan fechas" });
     }
+
+    const inicio = moment(fechaInicio, "YYYY/MM/DD").startOf('day').toDate();
+    const fin = moment(fechaFin, "YYYY/MM/DD").endOf('day').toDate();
+
+    const extras = await Extras.find({
+
+      fecha_inicio_trabajo: { $lte: fin },
+      fecha_fin_trabajo: { $gte: inicio },
+    })
+      .populate({
+        path: "FuncionarioAsignado", select: "nombre_completo identificacion",
+        populate: { path: "Cargo", select: "name" }
+      })
+      .sort({ fecha_inicio_trabajo: -1 });
+
+    console.log(`Buscando entre ${inicio.toISOString()} y ${fin.toISOString()}`);
+    console.log(`Se encontraron ${extras.length} registros.`);
+
+    res.status(200).json({ success: true, data: extras });
+    console.log(`Registros enviados al cliente: ${extras.length}`);
+
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 module.exports = {
-    crearExtras,
-    updateExtra,
-    eliminarExtras,
-    listarExtras,
-    listarExtrasPorIdentificacion,
-    listarExtrasPorFechas,
-    exportarExtrasExcel,
-    validarTurnoYHoras
+  crearExtras,
+  updateExtra,
+  eliminarExtras,
+  listarExtras,
+  listarExtrasPorIdentificacion,
+  listarExtrasPorFechas,
+  exportarExtrasExcel,
+  validarTurnoYHoras
 };

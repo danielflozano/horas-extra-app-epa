@@ -5,6 +5,7 @@ const Extras = require('../models/HorasExtras');
 const moment = require('moment');
 const { validarTurnoYHoras } = require('../controllers/Extras');
 const { calcularHorasExtras } = require('../helpers/CalculoHoras');
+const registrosValidados = [];
 
 const normalizeHeader = (header) => {
     if (!header) return "";
@@ -314,7 +315,8 @@ const importarExcel = async (req, res) => {
 
                 const datosParaGuardar = { ...registroLimpio, ...calculos };
                 const nuevaExtra = new Extras(datosParaGuardar);
-                await nuevaExtra.save();
+                registrosValidados.push(nuevaExtra);
+                resumen.registrosGuardados++;
 
                 resumen.registrosGuardados++;
             } catch (error) {
@@ -327,24 +329,35 @@ const importarExcel = async (req, res) => {
         // Después del FOR principal de filas
         let mensajeGeneral = "✅ Importación completada sin errores.";
 
-        // Caso 1: errores por horas extras repetidas
-        if (resumen.errores.some(e => e.includes("Ya existe un registro de horas"))) {
+        const hayRegistrosRepetidos = resumen.errores.some(e =>
+            typeof e === "string"
+                ? e.includes("Ya existe un registro de horas")
+                : e.mensaje.includes("Ya existe un registro de horas")
+        );
+
+        if (hayRegistrosRepetidos) {
             mensajeGeneral = "⚠️ Ya existen registros de horas extras en este mes para este tipo de operario.";
         }
-        // Caso 2: otros errores (formato, datos incompletos, etc.)
-        else if (resumen.errores.length > 0) {
-            mensajeGeneral = "⚠️ Algunos registros no se pudieron importar. Revisa el archivo.";
+        if (resumen.errores.length > 0) {
+            const detalleErrores = resumen.errores.map(e =>
+                typeof e === "string" ? `➡️ ${e}` : `➡️ Fila ${e.fila}, columna "${e.columna}": ${e.mensaje}`
+            ).join("\n");
+
+            return res.status(400).json({
+                success: false,
+                message: `⚠️ No se importó ningún registro porque se encontraron errores:\n${detalleErrores}`,
+                errores: resumen.errores
+            });
         }
 
-        // 👉 Respuesta final
+        await Promise.all(registrosValidados.map(r => r.save()));
+
         return res.status(200).json({
-            success: resumen.registrosGuardados > 0,
-            message: mensajeGeneral,  
+            success: true,
+            message: `✅ Se importaron correctamente ${resumen.registrosGuardados} registros.`,
             registrosGuardados: resumen.registrosGuardados,
-            registrosFallidos: resumen.registrosFallidos,
             funcionariosCreados: resumen.funcionariosCreados,
-            cargosCreados: resumen.cargosCreados,
-            errores: resumen.errores   // opcional, solo para debug
+            cargosCreados: resumen.cargosCreados
         });
 
     } catch (error) {

@@ -30,7 +30,7 @@ function calcularPeriodo(fechaInicio, fechaFin) {
 async function crearReporte(req, res) {
   try {
     const { fechaInicio, fechaFin, tipoOperario } = req.body;
-  
+
 
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ mensaje: "Debe enviar fechaInicio y fechaFin" });
@@ -313,8 +313,14 @@ async function exportarReporteExcel(req, res) {
 
     // --- 5. Envío del Archivo ---
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=Reporte_Consolidado_Horas_${moment().format('YYYYMMDD_HHmmss')}.xlsx`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Reporte_${tipoOperario}_${fechaInicio}_${fechaFin}.xlsx`
+    );
+
     await workbook.xlsx.write(res);
+    console.log("Respuesta "+res);
+    
     res.end();
 
   } catch (err) {
