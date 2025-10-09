@@ -148,7 +148,7 @@ router.delete('/delete/:id',validarJWT, eliminarExtras);
  *         description: Registro no encontrado
  */
 
-router.put('/update/:id',validarJWT, updateExtra);
+router.put('/update/:id', updateExtra);
 
 /**
  * @swagger

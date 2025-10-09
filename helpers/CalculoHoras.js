@@ -1,5 +1,6 @@
 const moment = require('moment');
 const Funcionario = require('../models/Funcionarios');
+const config = require('../config/config')
 
 async function calcularHorasExtras(data) {
   try {
@@ -14,14 +15,12 @@ async function calcularHorasExtras(data) {
       FuncionarioAsignado
     } = data;
 
-    // VALIDACIÓN 1: Verificar datos obligatorios
     if (!fecha_inicio_trabajo || !hora_inicio_trabajo || !fecha_fin_trabajo || !hora_fin_trabajo) {
       const error = `Faltan datos obligatorios: fecha_inicio=${fecha_inicio_trabajo}, hora_inicio=${hora_inicio_trabajo}, fecha_fin=${fecha_fin_trabajo}, hora_fin=${hora_fin_trabajo}`;
       console.error('❌', error);
       return { success: false, message: error };
     }
 
-    // VALIDACIÓN 2: Verificar que FuncionarioAsignado existe
     if (!FuncionarioAsignado) {
       const error = "FuncionarioAsignado no proporcionado";
       console.error('❌', error);
@@ -38,7 +37,6 @@ async function calcularHorasExtras(data) {
     const tipo = (funcionario.tipoOperario || 'planta').toLowerCase();
     console.log(`👤 Funcionario encontrado: ${funcionario.nombre_completo}, tipo: ${tipo}`);
 
-    // VALIDACIÓN 3: Verificar formato de fechas y horas antes de crear moment
     const fechaInicioValida = moment(fecha_inicio_trabajo, 'YYYY-MM-DD', true).isValid();
     const fechaFinValida = moment(fecha_fin_trabajo, 'YYYY-MM-DD', true).isValid();
     const horaInicioValida = moment(hora_inicio_trabajo, 'HH:mm', true).isValid();
@@ -50,7 +48,6 @@ async function calcularHorasExtras(data) {
       return { success: false, message: error };
     }
 
-    // CREACIÓN SEGURA DE MOMENTOS
     let inicioTotal, finTotal;
     try {
       inicioTotal = moment.utc(`${fecha_inicio_trabajo}T${hora_inicio_trabajo}`);
@@ -159,7 +156,7 @@ async function calcularHorasExtras(data) {
         
         if (diaSemana === 7) es_fin_de_semana = true;
 
-        const esNocturno = hora >= 18 || hora < 6;
+        const esNocturno = hora >= config.fin_jornada || hora < config.inicio_Jornada;
         const esOrdinario = totalMinutosTrabajados < limiteOrdinarias;
 
         if (diaSemana === 7 || esFestivo) {
@@ -205,7 +202,7 @@ if (totalMinutosTrabajados > 0 && totalMinutosTrabajados < limiteParaCompletar) 
         console.log(`⚠️ Faltan ${minutosFaltantes} minutos para completar jornada`);
 
         try {
-          const esNocturno = ultimoMinuto.hour() >= 18 || ultimoMinuto.hour() < 6;
+          const esNocturno = ultimoMinuto.hour() >= config.fin_jornada || ultimoMinuto.hour() < config.inicio_Jornada;
 
           if (esNocturno) {
               horas.HNO += minutosFaltantes;
@@ -222,13 +219,11 @@ if (totalMinutosTrabajados > 0 && totalMinutosTrabajados < limiteParaCompletar) 
           console.warn('⚠️ Error en ajuste de horas, continuando sin ajuste:', ajusteError.message);
         }
     } else {
-        // 🚫 Domingo o festivo → nunca se completa
+        
         console.log("📅 Domingo o festivo: no se completan horas faltantes");
     }
 }
 
-
-    // FUNCIÓN HELPER SEGURA
     const aHHMM = (min) => {
       if (typeof min !== 'number' || isNaN(min) || min < 0) {
         console.warn(`⚠️ Valor de minutos inválido: ${min}, usando 0`);
@@ -264,6 +259,5 @@ if (totalMinutosTrabajados > 0 && totalMinutosTrabajados < limiteParaCompletar) 
     return { success: false, message: errorMsg };
   }
 }
-
 
 module.exports = { calcularHorasExtras };

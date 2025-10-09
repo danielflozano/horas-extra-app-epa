@@ -172,10 +172,16 @@ const updateExtra = async (req, res) => {
     }
 
     // 3. Recalcular las horas con los datos ya validados
-    const calculos = calcularHorasExtras(datosFinales);
-    if (!calculos.success) {
-      return res.status(400).json({ success: false, message: calculos.message });
-    }
+    const calculos = await calcularHorasExtras (datosFinales);
+  
+   if (!calculos.success) {
+  console.error("❌ Error en calcularHorasExtras:", calculos);
+  return res.status(400).json({
+    success: false,
+    message: calculos.message || "Error desconocido al calcular horas extras",
+    detalle: calculos // incluir el objeto completo en la respuesta (opcional)
+  });
+}
 
     // 4. Actualizar el documento original con los nuevos datos y los nuevos cálculos
     Object.assign(extraOriginal, nuevosDatos, calculos);

@@ -8,7 +8,7 @@ const { generarJWT } = require('../helpers/jwt');
 const validator = require('validator');
 const jwt = require('jsonwebtoken');
 
-// --- FUNCIÓN SIN CAMBIOS ---
+
 const crearUsuario = async (req, res = response) => {
   const { name, email, password, rol } = req.body;
   try {
@@ -48,7 +48,6 @@ const crearUsuario = async (req, res = response) => {
 };
 
 
-// --- FUNCIÓN MODIFICADA ---
 const loginUsuario = async (req, res = response) => {
   const { email, password } = req.body;
   try {
@@ -76,7 +75,6 @@ const loginUsuario = async (req, res = response) => {
       expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 días desde ahora
     });
     await nuevoRefreshToken.save();
-    // --- FIN DE LA LÓGICA MODIFICADA ---
 
     // Aqui mando el refreshToken en una cookie
     res.cookie('refreshToken', refreshtoken, {
@@ -89,7 +87,7 @@ const loginUsuario = async (req, res = response) => {
     res.status(200).json({
       ok: true,
       token,
-      msg: 'Sesion iniciada exitosamente', // TODO: Debo dejar esto !!!
+      msg: 'Sesion iniciada exitosamente', 
       user: {
         uid: usuario.id,
         name: usuario.name,
@@ -126,9 +124,9 @@ const logoutUsuario = async (req, res = response) => {
     res.status(500).json({ ok: false, msg: 'Error en el servidor' });
   }
 };
-
+ 
 const revalidarToken = async (req, res = response) => {
-  // 👇 Leer el refresh token desde la cookie
+ 
   const refreshtoken = req.cookies.refreshToken;  
 
   if (!refreshtoken) {

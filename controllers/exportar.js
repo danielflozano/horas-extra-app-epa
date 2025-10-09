@@ -7,6 +7,11 @@ const { validarTurnoYHoras } = require('../controllers/Extras');
 const { calcularHorasExtras } = require('../helpers/CalculoHoras');
 const registrosValidados = [];
 
+
+const normalizarCargo = (valor) => {
+    if (!valor) return "sin cargo";
+    return valor.toString().trim().toLowerCase();
+};
 const normalizeHeader = (header) => {
     if (!header) return "";
     return header
@@ -176,6 +181,7 @@ const importarExcel = async (req, res) => {
             hora_fin_descanso: ["descanso hora final"],
             es_festivo_Inicio: ["es_festivo_inicio"],
             es_festivo_Fin: ["es_festivo_fin"],
+            cargo: ["cargo"]
         };
 
         const columnasObligatorias = [
@@ -225,20 +231,37 @@ const importarExcel = async (req, res) => {
                 let cedula = row[headerIndexMap.identificacion];
                 let funcionario = null;
 
-                // --- BLOQUE ORIGINAL DE FUNCIONARIO --- (completamente intacto)
+
                 if (cedula && cedula.toString().toLowerCase().includes("temporal")) {
                     const nombre = row[headerIndexMap.nombre_completo];
                     const cedulaTemporal = `TMP-${filaActual}`;
                     const nombreLimpio = nombre.toString().trim();
+                    const valorCargo = row[headerIndexMap.cargo];
+                    console.log("Cargos"+valorCargo);
+                    
+                    const nombreCargo = normalizarCargo(valorCargo);
+
+                    let cargoDoc = await Cargo.findOne({ name: nombreCargo });
+                    if (!cargoDoc) {
+                        cargoDoc = new Cargo({ name: nombreCargo });
+                        await cargoDoc.save();
+                        resumen.cargosCreados++;
+                    }
                     funcionario = await Funcionario.findOne({ nombre_completo: nombreLimpio, tipoOperario: "Temporal" });
                     if (!funcionario) {
                         funcionario = new Funcionario({
                             identificacion: cedulaTemporal,
                             nombre_completo: nombreLimpio,
                             tipoOperario: "Temporal",
+                            Cargo: cargoDoc._id,
                         });
                         await funcionario.save();
                         resumen.funcionariosCreados++;
+                    } else {
+                        if (!funcionario.Cargo || funcionario.Cargo.toString() !== cargoDoc._id.toString()) {
+                            funcionario.Cargo = cargoDoc._id;
+                            await funcionario.save();
+                        }
                     }
                     cedula = cedulaTemporal;
                 } else {
@@ -255,31 +278,59 @@ const importarExcel = async (req, res) => {
                         if (!nombre || !tipoOperarioDetectado) {
                             throw new Error(`Datos insuficientes para crear funcionario (cédula: ${cedulaNormalizada}).`);
                         }
+                        const valorCargo = row[headerIndexMap.cargo];
+                        const nombreCargo = normalizarCargo(valorCargo);
+
+                        let cargoDoc = null;
+                        if (nombreCargo && nombreCargo !== "sin cargo") {
+                            cargoDoc = await Cargo.findOne({ name: nombreCargo });
+                            if (!cargoDoc) {
+                                cargoDoc = new Cargo({ name: nombreCargo });
+                                await cargoDoc.save();
+                                resumen.cargosCreados++;
+                            }
+                        }
                         const nuevoFuncionarioData = {
                             identificacion: cedulaNormalizada,
                             nombre_completo: nombre.toString().trim(),
                             tipoOperario: tipoOperarioDetectado,
+                            Cargo: cargoDoc._id
                         };
                         if (tipoOperarioDetectado === "Planta") {
-                            const nombreCargo = row[0];
-                            if (nombreCargo) {
-                                const nombreCargoNormalizado = nombreCargo.toString().trim().toUpperCase();
-                                let cargo = await Cargo.findOne({ name: nombreCargoNormalizado });
-                                if (!cargo) {
-                                    cargo = new Cargo({ name: nombreCargoNormalizado });
-                                    await cargo.save();
+                            const valorCargoPlanta = row[headerIndexMap.Cargo];
+                            if (valorCargoPlanta) {
+                                const nombreCargoNormalizado = valorCargoPlanta.toString().trim().toLowerCase();
+                                let cargoPlanta = await Cargo.findOne({ name: nombreCargoNormalizado });
+                                if (!cargoPlanta) {
+                                    cargoPlanta = new Cargo({ name: nombreCargoNormalizado });
+                                    await cargoPlanta.save();
                                     resumen.cargosCreados++;
                                 }
-                                nuevoFuncionarioData.Cargo = cargo._id;
+                                nuevoFuncionarioData.Cargo = cargoPlanta._id;
+                                console.log("Cargo Planta"+nuevoFuncionarioData);
+                                
                             }
                         }
                         funcionario = new Funcionario(nuevoFuncionarioData);
                         await funcionario.save();
                         resumen.funcionariosCreados++;
+                    } else {
+                        const valorCargo = row[headerIndexMap.Cargo];
+                        if (valorCargo) {
+                            const nombreCargo = normalizarCargo(valorCargo);
+                            let cargoDoc = await Cargo.findOne({ name: nombreCargo });
+                            if (!cargoDoc) {
+                                cargoDoc = new Cargo({ name: nombreCargo });
+                                await cargoDoc.save();
+                                resumen.cargosCreados++;
+                            }
+                            if (!funcionario.Cargo || funcionario.Cargo.toString() !== cargoDoc._id.toString()) {
+                                funcionario.Cargo = cargoDoc._id;
+                                await funcionario.save();
+                            }
+                        }
                     }
                 }
-                // --- FIN BLOQUE FUNCIONARIO ---
-
                 let registroLimpio = { FuncionarioAsignado: funcionario._id };
 
                 for (const campoModelo in headerIndexMap) {
